@@ -16,6 +16,8 @@
     "build:worker": "cross-env WRANGLER_LOG_PATH=.wrangler/logs vinext build",
     "prepreview": "pnpm env:check:local",
     "preview": "cross-env WRANGLER_LOG_PATH=.wrangler/logs vinext start",
+    "prepreview:worker": "pnpm env:check:local",
+    "preview:worker": "cross-env WRANGLER_LOG_PATH=.wrangler/logs wrangler dev --config dist/server/wrangler.json --port 3000",
     "predeploy:check": "pnpm env:check:local",
     "deploy:check": "cross-env WRANGLER_LOG_PATH=.wrangler/logs vinext-cloudflare deploy --dry-run",
     "predeploy": "pnpm env:check:production",

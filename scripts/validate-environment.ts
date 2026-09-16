@@ -2,7 +2,7 @@ import {
   type AppEnvironment,
   EnvironmentConfigurationError,
   validateEnvironment,
-} from "../src/platform/environment/index.js";
+} from "../src/shared/config/environment.js";
 
 const requestedEnvironment = process.argv[2] as AppEnvironment | undefined;
 

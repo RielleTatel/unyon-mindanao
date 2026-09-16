@@ -11,9 +11,17 @@ const privilegedClientImports = new Set([
 
 function isPrivilegedClientImport(source) {
   return (
-    privilegedClientImports.has(source) ||
+    [...privilegedClientImports].some(
+      (privilegedImport) =>
+        source === privilegedImport || source.startsWith(`${privilegedImport}/`),
+    ) ||
+    source === "@/platform" ||
     source.startsWith("@/platform/") ||
-    /^@\/features\/[^/]+\/server(?:\/|$)/u.test(source)
+    /^@\/features\/[^/]+\/server(?:\/|$)/u.test(source) ||
+    (source.startsWith(".") &&
+      /(?:^|\/)(?:platform|server)(?:\/|$)/u.test(
+        source.replaceAll("../", "").replaceAll("./", ""),
+      ))
   );
 }
 
@@ -49,9 +57,54 @@ const clientBoundaryRule = {
     };
 
     return {
+      CallExpression(node) {
+        if (
+          node.callee.type === "Identifier" &&
+          node.callee.name === "require" &&
+          node.arguments[0]?.type === "Literal"
+        ) {
+          const source = node.arguments[0].value;
+
+          if (typeof source === "string" && isPrivilegedClientImport(source)) {
+            context.report({
+              node,
+              messageId: "privilegedImport",
+              data: { source },
+            });
+          }
+        }
+      },
       ExportAllDeclaration: checkSource,
       ExportNamedDeclaration: checkSource,
+      ImportExpression: checkSource,
       ImportDeclaration: checkSource,
+    };
+  },
+};
+
+const serverOnlyMarkerRule = {
+  meta: {
+    type: "problem",
+    schema: [],
+    messages: {
+      missingMarker:
+        "Privileged modules must import 'server-only' so transitive browser imports fail closed.",
+    },
+  },
+  create(context) {
+    const hasServerOnlyMarker = context.sourceCode.ast.body.some(
+      (node) =>
+        node.type === "ImportDeclaration" && node.source.value === "server-only",
+    );
+
+    if (hasServerOnlyMarker) {
+      return {};
+    }
+
+    return {
+      Program(node) {
+        context.report({ node, messageId: "missingMarker" });
+      },
     };
   },
 };
@@ -65,11 +118,21 @@ export default defineConfig([
       unyon: {
         rules: {
           "client-boundary": clientBoundaryRule,
+          "server-only-marker": serverOnlyMarkerRule,
         },
       },
     },
     rules: {
       "unyon/client-boundary": "error",
+    },
+  },
+  {
+    files: [
+      "src/platform/**/*.{ts,tsx}",
+      "src/features/*/server/**/*.{ts,tsx}",
+    ],
+    rules: {
+      "unyon/server-only-marker": "error",
     },
   },
   {
@@ -103,7 +166,16 @@ export default defineConfig([
           ],
           patterns: [
             {
-              group: ["@/platform/**", "@/features/*/server/**"],
+              group: [
+                "@/platform",
+                "@/platform/**",
+                "@/features/*/server/**",
+                "@prisma/client/**",
+                "firebase-admin/**",
+                "cloudflare:workers/**",
+                "**/platform/**",
+                "**/server/**",
+              ],
               message:
                 "Browser modules must use client-safe feature interfaces instead of privileged adapters.",
             },

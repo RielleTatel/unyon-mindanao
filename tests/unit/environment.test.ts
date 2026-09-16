@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   EnvironmentConfigurationError,
   validateEnvironment,
-} from "@/platform/environment";
+} from "@/shared/config/environment";
 
 describe("environment validation", () => {
   it("uses the local portal origin only in local development", () => {

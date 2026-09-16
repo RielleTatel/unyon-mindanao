@@ -10,6 +10,7 @@ pnpm dev
 ```
 
 Use `pnpm dev:worker` when behavior must be checked in the Workers-compatible Vinext runtime.
+After `pnpm build:worker`, use `pnpm preview:worker` for the generated Worker or `pnpm test:e2e:worker` for its browser checks.
 
 ## Verification
 

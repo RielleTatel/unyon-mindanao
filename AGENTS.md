@@ -25,7 +25,7 @@ Each feature exposes its interface from `server/index.ts`. Import another featur
 
 ## Development Commands
 
-Treat `package.json` scripts as canonical. Start locally with `pnpm dev`; use `pnpm dev:worker` for Workers-compatible development and `pnpm preview` after `pnpm build:worker` to exercise the Vinext production output. Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:integration`, and `pnpm test:e2e` before handoff. `pnpm deploy:check` validates the Cloudflare package without deploying it.
+Treat `package.json` scripts as canonical. Start locally with `pnpm dev`; use `pnpm dev:worker` for Vinext development and `pnpm preview:worker` after `pnpm build:worker` to exercise the generated Worker through local Wrangler/Workerd. Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:integration`, `pnpm test:e2e`, and `pnpm test:e2e:worker` before handoff. `pnpm deploy:check` validates the Cloudflare package without deploying it.
 
 ## Coding and Architecture Conventions
 

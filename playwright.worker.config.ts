@@ -5,7 +5,7 @@ import baseConfig from "./playwright.config";
 export default defineConfig({
   ...baseConfig,
   webServer: {
-    command: "pnpm preview",
+    command: "pnpm preview:worker",
     reuseExistingServer: false,
     url: "http://localhost:3000",
   },
