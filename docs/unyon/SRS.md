@@ -1,105 +1,155 @@
-# Software Requirements Specification (Simple)
+# Software Requirements Specification
+
 ## Unyon Mindanao Portal
 
-**Status:** Draft v0.1
-**Last updated:** 2026-08-04
-**Author:** Gabrielle
+- **Status:** MVP scope approved for implementation planning (v0.2)
+- **Last updated:** 2026-09-16
+- **Author:** Gabrielle
 
----
+## 1. Purpose and Scope
 
-## 1. Overview
+The Unyon Mindanao Portal is a private, responsive web application for the Unyon ng mga Estudyante sa Mindanao and its Member Universities. It centralizes events, announcements, birthdays, shortcuts, Event Evaluations, and Financial Reports for authorized student-government officers.
 
-The Unyon Mindanao Portal is a web system for the Unyon ng mga Estudyante sa Mindanao (Mindanao Confederation of College and University Student Governments). It serves as a shared hub for the confederation and its member university student governments — centralizing events, announcements, evaluations, and financial reporting in one place.
+The MVP replaces fragmented group chats, social posts, and spreadsheets with one governed source of information. It is a pilot built for a small administrative team and a free-tier-first operating model.
 
-## 2. Purpose
+Canonical domain terms are defined in [`../../CONTEXT.md`](../../CONTEXT.md).
 
-Give the confederation and its member schools a single portal to coordinate activities, track shared dates, evaluate events, and stay transparent about finances — replacing scattered group chats, Facebook posts, and spreadsheets.
+## 2. Actors and Authority
 
-## 3. Users
+| Actor | Authority |
+| --- | --- |
+| Super Admin | Manages the full portal, Member Universities, University Admins, shared content, all events, evaluations, and Financial Reports. |
+| University Admin | Manages its Member University profile, Representatives, birthdays, and University Events. It may publish its events without prior approval. |
+| Representative | Views published portal content and submits eligible Event Evaluations. |
 
-- **Confederation admin** — Unyon officers who manage content, post events, publish financial reports, and review evaluations.
-- **Member university representative** — student government officers from member universities who view content and may submit evaluations.
-- **(Possibly) Public / general student viewer** — see [[#7. Open Questions]] on whether the portal is public or member-only.
+A University Admin also has Representative capabilities. Authority comes from active, time-bounded Appointments stored by the portal, not from authentication-provider claims.
 
-## 4. Features
+## 3. Functional Requirements
 
-### 4.1 Confederation Calendar
-A shared calendar showing confederation-wide dates: assemblies, deadlines, congresses, member-hosted events.
+### 3.1 Authentication and Accounts
 
-### 4.2 Birthdays
-A list or calendar view of birthdays — likely of officers/delegates in the confederation.
+- The portal shall have no public content or public registration page.
+- Invited users shall sign in through Firebase Authentication using a verified email and password.
+- MFA is not required for the MVP; authenticator-app TOTP may be added later.
+- A Super Admin shall invite University Admins. A University Admin may invite or deactivate Representatives only for its Member University.
+- Invitations shall bind an email, role, Member University, inviter, and seven-day expiration.
+- A verified Firebase account without an accepted Invitation and active Appointment shall have no portal access.
+- Sessions shall use secure, HTTP-only cookies lasting up to five days. Sensitive account and data actions shall require recent password authentication.
+- Ending a user's final active Appointment shall remove portal access while preserving historical attribution.
 
-### 4.3 Shortcuts
-Quick links out to the official Unyon website and official social media page(s).
+### 3.2 Member Universities and Portal Users
 
-### 4.4 Events
-Event listings with details (title, date, location/host, description). Likely connected to the Calendar feature.
+- Super Admins shall create, update, archive, and restore Member Universities.
+- Portal Users may retain multiple historical Appointments but only one active Appointment for the same role and Member University.
+- Profiles shall contain full name, verified email, full birth date, optional photograph, account status, and Appointment history.
+- The portal shall not collect addresses, student numbers, gender, or phone numbers in the MVP.
 
-### 4.5 Evaluation
-A way to collect feedback/ratings on events or officers/member schools after they happen.
+### 3.3 Dashboard
 
-### 4.6 Financial Report
-A place to publish and view the confederation's financial reports (income, expenses, liquidation) for transparency to member schools.
+The authenticated dashboard shall show upcoming events, recent Announcements, current-month birthdays, open Event Evaluations, and role-specific administrative tasks. Navigation shall include Dashboard, Events, Announcements, Birthdays, Financial Reports, Evaluations, Shortcuts, Profile, and authorized administration areas.
 
-## 5. Non-Goals (for this version)
+### 3.4 Events and Calendar
 
-Keeping this SRS simple — the following are explicitly **out of scope** until decided otherwise:
+- One Event record shall power list, detail, and calendar views.
+- Events shall be either Confederation Events or University Events.
+- A University Event shall have one Owning University and may list co-host Member Universities. Co-host status shall not grant editing authority.
+- Event fields shall include title, description, type, start/end, all-day status, physical location or online link, cover image, contact person, owner, co-hosts, and lifecycle timestamps.
+- Event states shall be draft, published, cancelled, completed, and archived.
+- Super Admins may manage any Event. University Admins may manage only Events owned by their Member University.
+- Dates shall be stored in UTC and displayed in `Asia/Manila`.
+- Recurrence, RSVP, registration, arbitrary attachments, and calendar synchronization are excluded from the MVP.
 
-- Payment processing / dues collection
-- Messaging or chat between users
-- Mobile app (assume responsive web only, unless stated otherwise)
+### 3.5 Announcements and Shortcuts
 
-## 6. Assumptions
+- Super Admins shall manage portal-wide Announcements in draft, published, or archived states.
+- Super Admins shall manage ordered Shortcuts containing a label, external URL, and optional icon.
+- External destinations shall open in a new tab and be identified as external links.
+- University-specific Announcements and scheduled publishing are excluded from the MVP.
 
-- This is an internal-facing tool primarily for the confederation and its member university officers.
-- Content (events, financial reports) is managed by a small admin team, not self-service by every member school.
+### 3.6 Birthdays
 
-## 7. Open Questions
+- Birthdays shall include Portal Users with active Appointments.
+- Every Portal User may see a person's name, Member University, role, birth month, and birth day.
+- Only Super Admins and the relevant University Admins may view or edit the birth year.
+- Access to a full birth date shall be audited.
+- Birthday email and push notifications are excluded from the MVP.
 
-These need to be resolved with the Unyon officers/stakeholders before or during design. Answers should be filled in here as they're confirmed.
+### 3.7 Event Evaluations
 
-### Access & Users
-- Who exactly can log in — confederation officers only, or also every member university's student government officers?
-- Is any part of the portal public (viewable without login), e.g. events or financial reports for transparency?
-- Do member universities need their own accounts/roles, or just view access?
-- How many member universities/schools are in the confederation currently?
+- The MVP shall evaluate Events only, not officers or Member Universities.
+- A Super Admin shall manage a reusable, versioned Evaluation Template with required 1–5 rating questions and optional comments.
+- Each Event shall retain a snapshot of the template version assigned to it.
+- An evaluation shall open when its Event ends and close after seven days by default. A Super Admin may close, reopen, or extend it.
+- A cancelled Event shall not accept responses.
+- A Portal User with an active Appointment when the Event ends may submit one response and edit it until the window closes.
+- Super Admins may inspect attributable responses and export them as CSV.
+- The Owning University's University Admins may view or export anonymized aggregates and comments only after at least five responses exist.
 
-### Confederation Calendar
-- Who can add/edit calendar entries — admin only, or can member schools submit their own events for approval?
-- Should it sync with Google Calendar or another external calendar?
+### 3.8 Financial Reports
 
-### Birthdays
-- Whose birthdays — confederation officers only, or all member school officers/delegates?
-- Who inputs this data, and how is it kept updated (manual entry vs. profile self-edit)?
-- Any notification/reminder needed (e.g., email or dashboard alert on the day)?
+- Super Admins shall upload PDF Financial Reports with title, reporting period, description, publication date, and revision number.
+- Draft reports shall be visible only to Super Admins; published reports shall be visible to every Portal User.
+- Published files shall be immutable. Corrections shall create a new revision and mark the prior revision as superseded.
+- Structured income, expense, and liquidation accounting is excluded from the MVP.
 
-### Shortcuts
-- What exact links are needed beyond the official website and official page (e.g. Instagram, specific socials)?
-- Are shortcuts fixed/hardcoded or admin-editable?
+### 3.9 Files, Audit, and Administration
 
-### Events
-- Is this distinct from the Calendar, or the same data shown differently (list vs. calendar view)?
-- Do events need registration/RSVP, or just informational listing?
-- Can member universities submit their own hosted events, or only Unyon admins?
+- Event cover images shall accept JPEG, PNG, or WebP files up to 5 MB.
+- Financial Reports shall accept PDF files up to 25 MB.
+- Files shall use private storage, validated file signatures, server-controlled paths, and short-lived authorized downloads.
+- The portal shall audit administrative creation, publication, editing, archival, restoration, Appointment changes, and restricted birth-date access.
+- Business records shall be archived or deactivated rather than permanently deleted.
 
-### Evaluation
-- What is being evaluated — events, officers, member schools, or all three?
-- Who fills out evaluations (member reps only? general students?) and are responses anonymous?
-- What happens with results — just stored, or aggregated into visible reports/scores?
+## 4. Security and Privacy Requirements
 
-### Financial Report
-- What format — uploaded documents (PDF) vs. structured data (line items, tables)?
-- Who can view financial reports — all member schools, or admin/officers only?
-- How often are reports published (per event, quarterly, per term)?
-- Who approves/uploads reports?
+- Firebase shall establish identity only; PostgreSQL shall remain authoritative for roles, Appointments, resource ownership, and authorization.
+- Every protected read and mutation shall be authorized on the server using current database state.
+- Browser code shall never receive database credentials, storage credentials, Firebase administrative credentials, or unrestricted file URLs.
+- Scoped resources shall not reveal whether a forbidden record exists.
+- Logs shall exclude credentials, tokens, full birth dates, evaluation comments, and signed URLs.
+- Identifiable evaluation responses shall be retained for two years; anonymized aggregates may be retained indefinitely.
+- Audit records shall be retained for five years. Full birth dates shall be removed one year after the final Appointment ends.
 
-### General
-- Any existing branding/visual identity to follow (colors, logo)?
-- Target timeline or launch date?
-- Hosting/budget constraints?
+## 5. Quality and Experience Requirements
 
-## 8. Next Steps
+- The portal shall be responsive and meet WCAG 2.2 AA expectations for keyboard access, focus visibility, semantic structure, contrast, and reduced motion.
+- The initial interface language shall be English, with interface text centralized for future translation.
+- The UI shall use shadcn/ui and a restrained adaptation of the supplied Unyon branding: evergreen, olive, muted gold, cream, pale sage, organic geometry, and maritime motifs.
+- “Year 5” and “Anchored in the Currents” shall be treated as campaign references, not permanent portal copy, unless stakeholders approve otherwise.
+- The portal shall support the current and previous major versions of Chrome, Edge, Firefox, and Safari.
 
-1. Review open questions with Unyon officers.
-2. Fill in answers above.
-3. Expand this into a fuller SRS (data model, user flows, wireframes) once scope is confirmed.
+## 6. Platform and Operating Constraints
+
+- The application shall use Next.js App Router with TypeScript and deploy as a full-stack Cloudflare Worker through Vinext, with OpenNext as the tested fallback.
+- Prisma shall access Supabase PostgreSQL through a serverless-compatible pooled connection.
+- Cloudflare R2 shall store private images, PDFs, and encrypted database backups.
+- The pilot shall target free service tiers and monitor usage at 70%; 85% usage shall require archival or an approved upgrade.
+- Daily encrypted database backups shall retain seven daily and four weekly copies, with quarterly restore tests.
+- Free-tier pausing, quotas, and lack of an uptime SLA shall be disclosed to pilot stakeholders.
+
+## 7. Capacity Assumptions
+
+Design for up to 50 Member Universities, 10 active Portal Users per university, 500 Events per year, 1,000 Event Evaluation responses per Event, and moderate PDF publication. These are design ceilings, not guaranteed free-tier capacity; usage monitoring shall determine when an upgrade is required.
+
+## 8. MVP Acceptance Criteria
+
+The MVP is acceptable when:
+
+1. An invited, verified Super Admin can establish a secure session and create a Member University and University Admin.
+2. That University Admin can invite a Representative and publish a University Event.
+3. Authorized Portal Users can view the Event in list and calendar views while unauthorized requests are rejected.
+4. Eligible users can submit one Event Evaluation and authorized administrators see the correct attributable or anonymized result.
+5. A Super Admin can publish an Announcement, Shortcut, birthday, and versioned Financial Report.
+6. Authorization, audit, backup, restore, accessibility, and critical browser journeys pass automated or documented verification.
+
+## 9. Explicit Non-Goals
+
+- Public portal access
+- Payment processing or dues collection
+- Messaging or chat
+- Native mobile applications
+- RSVP, registration, or attendance tracking
+- Google Calendar synchronization
+- Birthday or event notifications
+- Structured accounting
+- Officer or university performance evaluations

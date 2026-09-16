@@ -1,37 +1,65 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
+## Project Context
 
-This repository is currently a documentation-first project for the Unyon Mindanao Portal. The active material is under `docs/unyon/`, which is organized as an Obsidian vault:
+This repository plans the Unyon Mindanao Portal. Consult the authoritative document for each change:
 
-- `docs/unyon/SRS.md` — draft software requirements and open product questions.
-- `docs/unyon/Welcome.md` — default vault welcome note; replace or remove when the documentation structure is established.
+- `CONTEXT.md` defines canonical domain language. Read it before naming models, roles, or workflows.
+- `docs/unyon/SRS.md` defines MVP behavior and acceptance criteria.
+- `docs/unyon/IMPLEMENTATION_PLAN.md` defines module seams, planned layout, phases, and verification.
+- `docs/adr/` records hard-to-reverse technology and architecture decisions. Read the relevant ADR before changing authentication, hosting, persistence, or storage.
+- `branding/` contains visual references; the evergreen/olive/gold identity is enduring, while “Year 5” campaign copy is not assumed permanent.
 
-There is no application source, test directory, asset directory, or generated build output yet. Keep new planning documents close to the feature or decision they describe, and use relative Markdown links for cross-references.
+## Project Structure
 
-## Build, Test, and Development Commands
+The repository is documentation-first. The application will use a feature-based layout:
 
-No build or test commands are configured at this stage. For documentation changes, review Markdown in an Obsidian-compatible viewer and inspect the diff with:
+- `src/app/` — thin Next.js route adapters and layouts.
+- `src/features/` — access, directory, events, evaluations, communications, financial reports, private files, and dashboard modules.
+- `src/platform/` — Firebase, Prisma, R2, email, and observability adapters.
+- `src/shared/` — shadcn/ui primitives and stable utilities.
+- `prisma/` — schema, migrations, and seed logic.
+- `tests/` — integration, end-to-end, and shared fixtures.
+
+Each feature exposes its interface from `server/index.ts`. Import another feature through that interface; keep its implementation private.
+
+## Development Commands
+
+No application package exists yet. For documentation work, run:
 
 ```sh
 git diff --check
-git diff -- docs/unyon/
+git diff -- docs/ CONTEXT.md AGENTS.md
 ```
 
-When implementation begins, document the canonical install, development, build, lint, and test commands here and in the project README.
+Phase 0 must add canonical `pnpm` scripts for development, Workers preview, build, lint, type-checking, tests, Prisma migrations, backup, and restore verification. Use those scripts once present instead of ad hoc commands.
 
-## Coding Style & Naming Conventions
+## Coding and Architecture Conventions
 
-Use Markdown with one top-level `#` heading per document and descriptive `##` sections. Keep prose concise, use bullets for requirements, and preserve the numbering and terminology already used in `docs/unyon/SRS.md`. Name files in `PascalCase.md` for standalone notes (for example, `DataModel.md`) and use descriptive lowercase directory names. Use Obsidian wikilinks only when linking to notes within the vault; use standard Markdown links for external resources.
+Use strict TypeScript, two-space indentation, `PascalCase` for React modules/types, `camelCase` for functions, and kebab-case feature directories. Keep routes thin and business behavior inside deep feature modules. Browser code must not import Prisma, Firebase administration, server-only modules, or raw R2 bindings. Every protected operation uses a typed authorization intent; PostgreSQL owns roles and Appointments.
 
 ## Testing Guidelines
 
-No automated testing or coverage requirements exist. Before submitting documentation changes, check links, headings, spelling, and formatting, and run `git diff --check`. Future code should add tests alongside the relevant feature and record its framework and naming convention here.
+Test through feature interfaces. Use Vitest for module behavior, disposable PostgreSQL for Prisma integration, Firebase Auth Emulator for identity scenarios, and Playwright for critical journeys. Cover every role, expired Appointment, wrong-university, co-host, restricted birth-year, and evaluation-disclosure case.
 
-## Commit & Pull Request Guidelines
+## Commits and Pull Requests
 
-The repository has no existing commits, so no established commit convention can be inferred. Use short, imperative subjects such as `docs: clarify evaluation requirements`. Pull requests should explain the scope, identify unresolved requirements or assumptions, link related issues when available, and include screenshots when a rendered document or UI is changed.
+Use short imperative subjects such as `docs: record storage decision` or `feat(events): publish university event`. Pull requests must identify the SRS requirement, describe authorization and data implications, include UI screenshots when relevant, and report lint, type-check, test, migration, and Workers-preview results.
 
-## Security & Configuration Tips
+## Security
 
-Do not commit credentials, private stakeholder data, unpublished financial records, or local editor metadata. Keep unresolved product decisions in the SRS until confirmed with Unyon stakeholders, and update its status and “Last updated” date when requirements change.
+Never commit credentials, tokens, production data, unrestricted file URLs, or private stakeholder records. Preserve user-owned files and unrelated changes.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specifications are tracked in GitHub Issues for this repository. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the five canonical triage labels defined in `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This repository uses a single-context domain layout with `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
