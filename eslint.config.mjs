@@ -2,9 +2,76 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTypeScript from "eslint-config-next/typescript";
 
+const privilegedClientImports = new Set([
+  "server-only",
+  "@prisma/client",
+  "firebase-admin",
+  "cloudflare:workers",
+]);
+
+function isPrivilegedClientImport(source) {
+  return (
+    privilegedClientImports.has(source) ||
+    source.startsWith("@/platform/") ||
+    /^@\/features\/[^/]+\/server(?:\/|$)/u.test(source)
+  );
+}
+
+const clientBoundaryRule = {
+  meta: {
+    type: "problem",
+    schema: [],
+    messages: {
+      privilegedImport:
+        "Client modules cannot import privileged server source '{{source}}'.",
+    },
+  },
+  create(context) {
+    const isClientModule = context.sourceCode.ast.body.some(
+      (node) =>
+        node.type === "ExpressionStatement" && node.directive === "use client",
+    );
+
+    if (!isClientModule) {
+      return {};
+    }
+
+    const checkSource = (node) => {
+      const source = node.source?.value;
+
+      if (typeof source === "string" && isPrivilegedClientImport(source)) {
+        context.report({
+          node,
+          messageId: "privilegedImport",
+          data: { source },
+        });
+      }
+    };
+
+    return {
+      ExportAllDeclaration: checkSource,
+      ExportNamedDeclaration: checkSource,
+      ImportDeclaration: checkSource,
+    };
+  },
+};
+
 export default defineConfig([
   ...nextVitals,
   ...nextTypeScript,
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    plugins: {
+      unyon: {
+        rules: {
+          "client-boundary": clientBoundaryRule,
+        },
+      },
+    },
+    rules: {
+      "unyon/client-boundary": "error",
+    },
+  },
   {
     files: [
       "src/**/*.client.{ts,tsx}",

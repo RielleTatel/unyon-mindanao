@@ -1,18 +1,21 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
+import { portalMessages } from "@/shared/i18n/en";
+
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Unyon Mindanao Portal",
-  description:
-    "The private workspace of Unyon ng mga Estudyante sa Mindanao and its Member Universities.",
+  title: portalMessages.metadata.title,
+  description: portalMessages.metadata.description,
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html className="scroll-smooth motion-reduce:scroll-auto" lang="en">
+      <body className="m-0 bg-background font-sans text-foreground [text-rendering:optimizeLegibility]">
+        {children}
+      </body>
     </html>
   );
 }

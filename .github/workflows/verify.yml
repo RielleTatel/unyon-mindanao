@@ -37,3 +37,5 @@ jobs:
         run: pnpm build
       - name: Build for Cloudflare Workers
         run: pnpm build:worker
+      - name: Test Workers production runtime
+        run: pnpm test:e2e:worker
