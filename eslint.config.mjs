@@ -2,24 +2,36 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTypeScript from "eslint-config-next/typescript";
 
-const privilegedClientImports = new Set([
+const privilegedPackages = new Set([
   "server-only",
   "@prisma/client",
   "firebase-admin",
   "cloudflare:workers",
 ]);
 
-function isPrivilegedClientImport(source) {
+function isPrivilegedPackage(source) {
+  return [...privilegedPackages].some(
+    (privilegedPackage) =>
+      source === privilegedPackage || source.startsWith(`${privilegedPackage}/`),
+  );
+}
+
+function isPlatformImport(source) {
   return (
-    [...privilegedClientImports].some(
-      (privilegedImport) =>
-        source === privilegedImport || source.startsWith(`${privilegedImport}/`),
-    ) ||
     source === "@/platform" ||
     source.startsWith("@/platform/") ||
+    (source.startsWith(".") &&
+      /(?:^|\/)platform(?:\/|$)/u.test(
+        source.replaceAll("../", "").replaceAll("./", ""),
+      ))
+  );
+}
+
+function isFeatureServerImport(source) {
+  return (
     /^@\/features\/[^/]+\/server(?:\/|$)/u.test(source) ||
     (source.startsWith(".") &&
-      /(?:^|\/)(?:platform|server)(?:\/|$)/u.test(
+      /(?:^|\/)server(?:\/|$)/u.test(
         source.replaceAll("../", "").replaceAll("./", ""),
       ))
   );
@@ -31,7 +43,7 @@ const clientBoundaryRule = {
     schema: [],
     messages: {
       privilegedImport:
-        "Client modules cannot import privileged server source '{{source}}'.",
+        "Only approved server modules can import privileged source '{{source}}'.",
     },
   },
   create(context) {
@@ -39,15 +51,20 @@ const clientBoundaryRule = {
       (node) =>
         node.type === "ExpressionStatement" && node.directive === "use client",
     );
+    const filename = context.filename.replaceAll("\\", "/");
+    const isApprovedServerModule =
+      filename.includes("/src/platform/") ||
+      /\/src\/features\/[^/]+\/server\//u.test(filename);
 
-    if (!isClientModule) {
-      return {};
-    }
+    const isForbiddenImport = (source) =>
+      ((isPrivilegedPackage(source) || isPlatformImport(source)) &&
+        !isApprovedServerModule) ||
+      (isFeatureServerImport(source) && isClientModule);
 
     const checkSource = (node) => {
       const source = node.source?.value;
 
-      if (typeof source === "string" && isPrivilegedClientImport(source)) {
+      if (typeof source === "string" && isForbiddenImport(source)) {
         context.report({
           node,
           messageId: "privilegedImport",
@@ -65,7 +82,7 @@ const clientBoundaryRule = {
         ) {
           const source = node.arguments[0].value;
 
-          if (typeof source === "string" && isPrivilegedClientImport(source)) {
+          if (typeof source === "string" && isForbiddenImport(source)) {
             context.report({
               node,
               messageId: "privilegedImport",

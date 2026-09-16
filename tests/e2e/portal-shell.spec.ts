@@ -11,6 +11,7 @@ test("Portal User sees the private Confederation workspace", async ({ page }) =>
   const signInLink = page.getByRole("link", { name: "Sign in" }).first();
   await expect(signInLink).toHaveAttribute("href", "/sign-in");
   await expect(signInLink).toHaveCSS("color", "rgb(255, 253, 242)");
+  await expect(page.getByText("01")).toHaveCSS("color", "rgb(83, 98, 75)");
   await expect(page.getByText(/year 5/i)).toHaveCount(0);
   await expect(page.getByText(/anchored in the currents/i)).toHaveCount(0);
 });

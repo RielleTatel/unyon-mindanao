@@ -168,7 +168,7 @@ export function PortalShell() {
                   <span className={iconTileClassName} aria-hidden="true">
                     <Icon size={20} />
                   </span>
-                  <span className="font-serif text-[0.8rem] text-[#839162] italic">
+                  <span className="font-serif text-[0.8rem] text-muted-foreground italic">
                     0{index + 1}
                   </span>
                 </div>
