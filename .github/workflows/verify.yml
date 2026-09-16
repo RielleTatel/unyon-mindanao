@@ -1,0 +1,39 @@
+name: Verify
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint
+      - name: Type-check
+        run: pnpm typecheck
+      - name: Test modules
+        run: pnpm test
+      - name: Test integrations
+        run: pnpm test:integration
+      - name: Install browser
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Test browser journeys
+        run: pnpm test:e2e
+      - name: Build Next.js
+        run: pnpm build
+      - name: Build for Cloudflare Workers
+        run: pnpm build:worker

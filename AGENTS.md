@@ -2,7 +2,7 @@
 
 ## Project Context
 
-This repository plans the Unyon Mindanao Portal. Consult the authoritative document for each change:
+This repository implements the Unyon Mindanao Portal. Consult the authoritative document for each change:
 
 - `CONTEXT.md` defines canonical domain language. Read it before naming models, roles, or workflows.
 - `docs/unyon/SRS.md` defines MVP behavior and acceptance criteria.
@@ -25,14 +25,7 @@ Each feature exposes its interface from `server/index.ts`. Import another featur
 
 ## Development Commands
 
-No application package exists yet. For documentation work, run:
-
-```sh
-git diff --check
-git diff -- docs/ CONTEXT.md AGENTS.md
-```
-
-Phase 0 must add canonical `pnpm` scripts for development, Workers preview, build, lint, type-checking, tests, Prisma migrations, backup, and restore verification. Use those scripts once present instead of ad hoc commands.
+Treat `package.json` scripts as canonical. Start locally with `pnpm dev`; use `pnpm dev:worker` for Workers-compatible development and `pnpm preview` after `pnpm build:worker` to exercise the Vinext production output. Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:integration`, and `pnpm test:e2e` before handoff. `pnpm deploy:check` validates the Cloudflare package without deploying it.
 
 ## Coding and Architecture Conventions
 
@@ -63,3 +56,13 @@ Use the five canonical triage labels defined in `docs/agents/triage-labels.md`.
 ### Domain docs
 
 This repository uses a single-context domain layout with `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

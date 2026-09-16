@@ -1,0 +1,31 @@
+# dependencies
+/node_modules/
+
+# Next.js and vinext outputs
+/.next/
+/.vinext/
+/dist/
+/out/
+
+# testing
+/coverage/
+/playwright-report/
+/test-results/
+
+# environment and Cloudflare state
+.env
+.env.local
+.env.*.local
+!.env.example
+/.wrangler/
+/.pnpm-store/
+.dev.vars
+
+# editor and OS files
+.DS_Store
+/.obsidian/
+docs/unyon/.obsidian/workspace.json
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
