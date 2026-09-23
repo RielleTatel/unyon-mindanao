@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: unyon
+      POSTGRES_PASSWORD: unyon
+      POSTGRES_USER: unyon
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U unyon -d unyon"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    volumes:
+      - unyon_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  unyon_postgres_data:

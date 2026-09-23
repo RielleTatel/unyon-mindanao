@@ -14,6 +14,8 @@
   --muted-foreground: #53624b;
   --accent: #e6d097;
   --accent-foreground: #30452e;
+  --destructive: #a7352a;
+  --destructive-foreground: #fffdf2;
   --border: #c9cfad;
   --ring: #c89c42;
   --radius: 1rem;
@@ -32,6 +34,8 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
   --color-ring: var(--ring);
   --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,

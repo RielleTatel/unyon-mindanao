@@ -1,0 +1,41 @@
+import { randomUUID } from "node:crypto";
+import { config } from "dotenv";
+import { expect, test } from "@playwright/test";
+
+config({ path: ".env.local", quiet: true });
+
+test("Super Admin publishes and archives an Announcement and manages an external Shortcut", async ({ page }) => {
+  const title = `Prototype update ${randomUUID().slice(0, 8)}`;
+  await page.goto("/sign-in");
+  await page.getByLabel("Email address").fill(process.env.LOCAL_SUPER_ADMIN_EMAIL!);
+  await page.getByLabel("Password").fill(process.env.LOCAL_SUPER_ADMIN_PASSWORD!);
+  await page.getByRole("button", { name: "Sign in securely" }).click();
+  await expect(page).toHaveURL(/\/portal$/u);
+  await page.getByRole("link", { name: "Announcements", exact: true }).click();
+  await page.getByText("Create Announcement", { exact: true }).click();
+  const creation = page.locator("form").filter({ has: page.getByRole("button", { name: "Save draft", exact: true }) });
+  await creation.getByLabel("Title", { exact: true }).fill(title);
+  await creation.getByLabel("Announcement text").fill("A private Confederation update for the local prototype.");
+  await creation.getByRole("button", { name: "Save draft", exact: true }).click();
+  const article = page.getByRole("article").filter({ has: page.getByRole("heading", { name: title, exact: true }) });
+  await expect(article.getByText("DRAFT", { exact: true })).toBeVisible();
+  await article.getByRole("button", { name: "Publish Announcement" }).click();
+  await expect(article.getByText("PUBLISHED", { exact: true })).toBeVisible();
+  await article.getByRole("button", { name: "Archive Announcement" }).click();
+  await expect(article.getByText("ARCHIVED", { exact: true })).toBeVisible();
+  await page.goto("/portal/shortcuts");
+  await page.getByText("Create Shortcut", { exact: true }).click();
+  const createShortcut = page.locator("details").filter({ has: page.getByText("Create Shortcut", { exact: true }) });
+  await createShortcut.getByLabel("Label", { exact: true }).fill(title);
+  await createShortcut.getByLabel("External URL").fill("https://example.org/resources");
+  await createShortcut.getByRole("button", { name: "Save Shortcut" }).click();
+  const link = page.getByRole("link", { name: new RegExp(title) });
+  await expect(link).toHaveAttribute("target", "_blank");
+  await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  await expect(link).toContainText("External link");
+  const item = page.getByRole("listitem").filter({ has: link });
+  await item.getByText("Edit Shortcut", { exact: true }).click();
+  await item.getByLabel("Active", { exact: true }).uncheck();
+  await item.getByRole("button", { name: "Save Shortcut" }).click();
+  await expect(item.getByText("Inactive", { exact: true })).toBeVisible();
+});

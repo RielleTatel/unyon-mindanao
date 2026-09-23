@@ -1,0 +1,35 @@
+import { randomUUID } from "node:crypto";
+import { config } from "dotenv";
+import { expect, test } from "@playwright/test";
+config({ path: ".env.local", quiet: true });
+
+test("publishes a private PDF and preserves the superseded revision", async ({ page }) => {
+  await page.goto("/sign-in");
+  await page.getByLabel("Email address").fill(process.env.LOCAL_SUPER_ADMIN_EMAIL!);
+  await page.getByLabel("Password").fill(process.env.LOCAL_SUPER_ADMIN_PASSWORD!);
+  await page.getByRole("button", { name: "Sign in securely" }).click();
+  await expect(page).toHaveURL(/\/portal$/u);
+  await page.getByRole("link", { name: "Financial Reports", exact: true }).click();
+  const title = `Local report ${randomUUID().slice(0, 8)}`;
+  await page.getByLabel("Title", { exact: true }).fill(title);
+  await page.getByLabel("Reporting period").fill("September 2026");
+  await page.getByLabel("Description").fill("Local prototype publication.");
+  await page.getByRole("button", { name: "Create draft", exact: true }).click();
+  const report = page.getByRole("article").filter({ has: page.getByRole("heading", { name: title, exact: true }) });
+  const pdf = { name: "report.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.7\nLocal prototype PDF fixture\n%%EOF") };
+  await report.getByLabel("PDF (up to 25 MB)").setInputFiles(pdf);
+  await report.getByRole("button", { name: "Upload file" }).click();
+  await expect(report.getByText("File saved.", { exact: true })).toBeVisible();
+  await report.getByRole("button", { name: "Publish revision 1" }).click();
+  await expect(report.getByRole("heading", { name: "Revision 1 · PUBLISHED" })).toBeVisible();
+  const download = page.waitForEvent("download");
+  await report.getByRole("button", { name: "Download PDF" }).click();
+  expect((await download).suggestedFilename()).toBe("financial-report.pdf");
+  await report.getByRole("button", { name: "Create correction revision" }).click();
+  await report.getByLabel("PDF (up to 25 MB)").setInputFiles(pdf);
+  await report.getByRole("button", { name: "Upload file" }).click();
+  await expect(report.getByText("File saved.", { exact: true })).toBeVisible();
+  await report.getByRole("button", { name: "Publish revision 2" }).click();
+  await expect(report.getByRole("heading", { name: "Revision 2 · PUBLISHED" })).toBeVisible();
+  await expect(report.getByRole("heading", { name: "Revision 1 · SUPERSEDED" })).toBeVisible();
+});

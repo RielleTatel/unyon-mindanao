@@ -209,6 +209,8 @@ export default defineConfig([
     "coverage/**",
     "playwright-report/**",
     "test-results/**",
+    "src/platform/database/generated/**",
+    "src/platform/database/generated-node/**",
     "next-env.d.ts",
     "branding/**",
     ".obsidian/**",

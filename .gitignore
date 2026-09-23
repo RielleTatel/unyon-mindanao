@@ -1,5 +1,7 @@
 # dependencies
 /node_modules/
+/src/platform/database/generated/
+/src/platform/database/generated-node/
 
 # Next.js and vinext outputs
 /.next/
@@ -18,8 +20,12 @@
 .env.*.local
 !.env.example
 /.wrangler/
+/.local-private-files/
+/.local-backups/
 /.pnpm-store/
 .dev.vars
+/firebase-debug.log
+/ui-debug.log
 
 # editor and OS files
 .DS_Store

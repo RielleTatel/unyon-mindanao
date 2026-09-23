@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html className="scroll-smooth motion-reduce:scroll-auto" lang="en">
+    <html className="scroll-smooth motion-reduce:scroll-auto" data-scroll-behavior="smooth" lang="en">
       <body className="m-0 bg-background font-sans text-foreground [text-rendering:optimizeLegibility]">
         {children}
       </body>

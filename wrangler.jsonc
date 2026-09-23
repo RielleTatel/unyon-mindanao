@@ -4,6 +4,7 @@
   "main": "vinext/server/fetch-handler",
   "compatibility_date": "2026-09-16",
   "compatibility_flags": ["nodejs_compat"],
+  "r2_buckets": [{ "binding": "PRIVATE_FILES", "bucket_name": "unyon-private-files" }],
   "assets": {
     "binding": "ASSETS",
     "directory": "dist/client",

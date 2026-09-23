@@ -9,10 +9,16 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(rootDirectory, "src"),
+      "server-only": path.resolve(rootDirectory, "tests/stubs/server-only.ts"),
+      "#unyon-prisma-client": path.resolve(
+        rootDirectory,
+        "src/platform/database/generated-node/client.ts",
+      ),
     },
   },
   test: {
     environment: "node",
+    fileParallelism: false,
     include: ["tests/integration/**/*.test.ts"],
   },
 });
