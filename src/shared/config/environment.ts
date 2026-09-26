@@ -22,6 +22,7 @@ export function validateEnvironment(
   source: Readonly<Record<string, string | undefined>>,
 ): PortalEnvironment {
   const environment = appEnvironmentSchema.parse(appEnvironment);
+  const persistenceProvider = source.PERSISTENCE_PROVIDER ?? "postgres";
   const rawOrigin =
     source.NEXT_PUBLIC_APP_ORIGIN ??
     (environment === "local" ? "http://localhost:3000" : undefined);
@@ -59,7 +60,7 @@ export function validateEnvironment(
   }
 
   if (environment !== "local") {
-    validateServiceConfiguration(source);
+    validateServiceConfiguration(source, environment, persistenceProvider);
   }
 
   if (source.APP_ENV && source.APP_ENV !== environment) {
@@ -76,15 +77,19 @@ export function validateEnvironment(
 
 function validateServiceConfiguration(
   source: Readonly<Record<string, string | undefined>>,
+  environment: AppEnvironment,
+  persistenceProvider: string,
 ) {
+  if (persistenceProvider !== "postgres" && persistenceProvider !== "d1") {
+    throw new EnvironmentConfigurationError(
+      "PERSISTENCE_PROVIDER must be postgres or d1",
+    );
+  }
   const required = [
-    "DATABASE_URL",
     "FIREBASE_PROJECT_ID",
     "NEXT_PUBLIC_FIREBASE_API_KEY",
     "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
     "NEXT_PUBLIC_FIREBASE_PROJECT_ID",
-    "RESEND_API_KEY",
-    "INVITATION_FROM_EMAIL",
   ] as const;
 
   for (const key of required) {
@@ -93,23 +98,48 @@ function validateServiceConfiguration(
     }
   }
 
-  let databaseUrl: URL;
+  if (persistenceProvider === "postgres" && !source.DATABASE_URL?.trim()) {
+    throw new EnvironmentConfigurationError("DATABASE_URL is required");
+  }
 
-  try {
-    databaseUrl = new URL(source.DATABASE_URL as string);
-  } catch {
+  const hasInvitationApiKey = Boolean(source.RESEND_API_KEY?.trim());
+  const hasInvitationSender = Boolean(source.INVITATION_FROM_EMAIL?.trim());
+  const invitationEmailRequired = environment === "production";
+
+  if (
+    invitationEmailRequired &&
+    (!hasInvitationApiKey || !hasInvitationSender)
+  ) {
     throw new EnvironmentConfigurationError(
-      "DATABASE_URL must be an absolute PostgreSQL URL",
+      `${!hasInvitationApiKey ? "RESEND_API_KEY" : "INVITATION_FROM_EMAIL"} is required`,
     );
   }
 
-  if (
-    !["postgres:", "postgresql:"].includes(databaseUrl.protocol) ||
-    isLocalDatabaseHost(databaseUrl.hostname)
-  ) {
+  if (hasInvitationApiKey !== hasInvitationSender) {
     throw new EnvironmentConfigurationError(
-      "DATABASE_URL must use a non-local PostgreSQL service",
+      "RESEND_API_KEY and INVITATION_FROM_EMAIL must be configured together",
     );
+  }
+
+  if (persistenceProvider === "postgres") {
+    let databaseUrl: URL;
+
+    try {
+      databaseUrl = new URL(source.DATABASE_URL as string);
+    } catch {
+      throw new EnvironmentConfigurationError(
+        "DATABASE_URL must be an absolute PostgreSQL URL",
+      );
+    }
+
+    if (
+      !["postgres:", "postgresql:"].includes(databaseUrl.protocol) ||
+      isLocalDatabaseHost(databaseUrl.hostname)
+    ) {
+      throw new EnvironmentConfigurationError(
+        "DATABASE_URL must use a non-local PostgreSQL service",
+      );
+    }
   }
 
   if (source.FIREBASE_PROJECT_ID !== source.NEXT_PUBLIC_FIREBASE_PROJECT_ID) {
@@ -118,7 +148,10 @@ function validateServiceConfiguration(
     );
   }
 
-  if (!z.email().safeParse(source.INVITATION_FROM_EMAIL).success) {
+  if (
+    hasInvitationSender &&
+    !z.email().safeParse(source.INVITATION_FROM_EMAIL).success
+  ) {
     throw new EnvironmentConfigurationError(
       "INVITATION_FROM_EMAIL must be a valid email address",
     );

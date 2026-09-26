@@ -19,6 +19,7 @@ export interface EvaluationRepository {
   createTemplate(questions: EvaluationQuestion[]): Promise<void>;
   count(id: string): Promise<number>;
   results(id: string, attributable: boolean, questions: EvaluationQuestion[]): Promise<EvaluationResults>;
+  expireResponses(now: Date): Promise<number>;
 }
 const idInput = z.object({ id: z.string().uuid() });
 const questions = z.array(z.object({ label: z.string().trim().min(1).max(300), kind: z.enum(["RATING", "COMMENT"]) })).min(1).max(30).refine((items) => items.some(({ kind }) => kind === "RATING"));
@@ -81,6 +82,7 @@ export function createEvaluationFeature(dependencies: { sessions: Pick<SessionSe
     }),
     templates: factory.query({ intent: "evaluation.templates", input: z.object({}), resolveSubject: async () => ({ id: "templates", kind: "EvaluationTemplateDirectory" }), authorize: ({ actor }) => admin(actor), execute: ({ transaction }) => transaction.capabilities.evaluations.templates() }),
     createTemplate: factory.mutation({ intent: "evaluation.template.create", action: "evaluation.template_created", input: z.object({ questions }), resolveSubject: async () => ({ id: "templates", kind: "EvaluationTemplateDirectory" }), authorize: ({ actor }) => admin(actor), execute: async ({ transaction }, input) => { await transaction.capabilities.evaluations.createTemplate(input.questions); return { saved: true }; } }),
+    expireResponses: factory.mutation({ intent: "evaluation.retention", action: "evaluation.responses_expired", input: z.object({}), resolveSubject: async () => ({ id: "evaluation-retention", kind: "EvaluationResponseDirectory" }), authorize: ({ actor }) => admin(actor), execute: async ({ transaction, occurredAt }) => ({ removed: await transaction.capabilities.evaluations.expireResponses(occurredAt) }), auditMetadata: (result) => ({ removedCount: result.removed }) }),
   };
 }
 function csvCell(value: string | number) { const text = String(value); return `"${(/^[\s]*[=+@\-]/u.test(text) ? "'" + text : text).replaceAll('"', '""')}"`; }

@@ -3,8 +3,30 @@ import { z } from "zod";
 import type { Prisma } from "#unyon-prisma-client";
 import { AccessError, createProtectedOperationFactory, requireRecentPassword, retryDatabaseTransactions, withAccessRuntime, type IdentityVerifier, type SessionService, type TransactionRunner } from "@/features/access/server";
 import { createFirebaseIdentityVerifier } from "@/platform/firebase/identity-verifier";
+import { D1AccountRepository } from "./d1-account-repository";
 
-export class PrismaAccountRepository {
+export interface AccountRepository {
+  list(): Promise<Array<{ id: string; fullName: string; email: string; status: "ACTIVE" | "DISABLED" }>>;
+  get(id: string): Promise<{ id: string; status: "ACTIVE" | "DISABLED" } | null>;
+  setStatus(id: string, status: "ACTIVE" | "DISABLED", now: Date): Promise<void>;
+  appointments(): Promise<Array<{
+    id: string;
+    portalUserId: string;
+    startsAt: string;
+    endsAt: string | null;
+    portalUser: { fullName: string };
+    university: { name: string } | null;
+  }>>;
+  appointment(id: string): Promise<{
+    id: string;
+    portalUserId: string;
+    startsAt: Date;
+    endsAt: Date | null;
+  } | null>;
+  endAppointment(id: string, userId: string, now: Date): Promise<void>;
+}
+
+export class PrismaAccountRepository implements AccountRepository {
   constructor(private readonly transaction: Prisma.TransactionClient) {}
   list() { return this.transaction.portalUser.findMany({ select: { id: true, fullName: true, email: true, status: true }, orderBy: { fullName: "asc" } }); }
   get(id: string) { return this.transaction.portalUser.findUnique({ where: { id }, select: { id: true, status: true } }); }
@@ -23,7 +45,7 @@ export class PrismaAccountRepository {
     if (!remaining) await this.transaction.portalSession.updateMany({ where: { portalUserId: userId, revokedAt: null }, data: { revokedAt: now } });
   }
 }
-export function createAccountFeature(dependencies: { sessions: Pick<SessionService, "hashSessionToken">; transactions: TransactionRunner<{ accounts: PrismaAccountRepository }>; identityVerifier: IdentityVerifier }) {
+export function createAccountFeature(dependencies: { sessions: Pick<SessionService, "hashSessionToken">; transactions: TransactionRunner<{ accounts: AccountRepository }>; identityVerifier: IdentityVerifier }) {
   const factory = createProtectedOperationFactory({ ...dependencies, transactions: retryDatabaseTransactions(dependencies.transactions) });
   const admin = ({ actor }: { actor: { appointments: { role: string }[] } }) => actor.appointments.some(({ role }) => role === "SUPER_ADMIN");
   return {
@@ -47,5 +69,19 @@ export function createAccountFeature(dependencies: { sessions: Pick<SessionServi
   };
 }
 export function withAccountFeature<Result>(work: (feature: ReturnType<typeof createAccountFeature>) => Promise<Result>) {
+  if (process.env.PERSISTENCE_PROVIDER === "d1") {
+    return import("@/features/access/server/d1-runtime").then(({ withD1AccessRuntime }) =>
+      withD1AccessRuntime<{ accounts: AccountRepository }, Result>(
+        (sessions, persistence) => work(createAccountFeature({
+          sessions, transactions: persistence.transactions,
+          identityVerifier: createFirebaseIdentityVerifier({
+            projectId: process.env.FIREBASE_PROJECT_ID!,
+            emulatorHost: process.env.APP_ENV === "local" ? process.env.FIREBASE_AUTH_EMULATOR_HOST : undefined,
+          }),
+        })),
+        (transaction) => ({ accounts: new D1AccountRepository(transaction) }),
+      ),
+    );
+  }
   return withAccessRuntime<{ accounts: PrismaAccountRepository }, Result>((sessions, persistence) => work(createAccountFeature({ sessions, transactions: persistence.transactions, identityVerifier: createFirebaseIdentityVerifier({ projectId: process.env.FIREBASE_PROJECT_ID!, emulatorHost: process.env.APP_ENV === "local" ? process.env.FIREBASE_AUTH_EMULATOR_HOST : undefined }) })), (transaction) => ({ accounts: new PrismaAccountRepository(transaction) }));
 }

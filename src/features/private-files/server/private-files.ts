@@ -99,7 +99,10 @@ export function createPrivateFileFeature(dependencies: { sessions: Pick<SessionS
       execute: async ({ subject, occurredAt }, input) => {
         if (subject.file.status !== "PENDING" || subject.file.expiresAt <= occurredAt) throw new AccessError("CONFLICT", "Upload is no longer pending");
         if (input.bytes.length !== subject.file.size || input.mimeType !== subject.file.mimeType || !validSignature(input.bytes, input.mimeType)) throw new AccessError("INVALID_INPUT", "Invalid file contents");
-        if (!await dependencies.store.putIfAbsent(subject.file.key, input.bytes, input.mimeType)) throw new AccessError("CONFLICT", "File already uploaded; commit it or reserve a new upload");
+        if (!await dependencies.store.putIfAbsent(subject.file.key, input.bytes, input.mimeType)) {
+          const existing = await dependencies.store.get(subject.file.key);
+          if (!existing || existing.mimeType !== input.mimeType || existing.bytes.length !== input.bytes.length || await sha256(existing.bytes) !== await sha256(input.bytes)) throw new AccessError("CONFLICT", "This reservation already has different bytes");
+        }
         return { uploaded: true };
       },
     }),

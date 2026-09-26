@@ -18,12 +18,26 @@ async function actor(role: PortalRole, universityId?: string, startsAt = new Dat
   const { transactions } = createAccessPersistence(prisma, (transaction) => ({ evaluations: new PrismaEvaluationRepository(transaction) }));
   return { user, appointment, universityId, feature: createEvaluationFeature({ transactions, sessions: { hashSessionToken: async () => tokenHash } }) };
 }
-async function event(creatorId: string, ownerUniversityId?: string) {
-  return prisma.event.create({ data: { title: "Completed prototype Event", description: "Fixture", category: "Assembly", startsAt: new Date(Date.now() - 7200000), endsAt: new Date(Date.now() - 3600000), location: "Local", status: "PUBLISHED", publishedAt: new Date(Date.now() - 86400000), ownerUniversityId, createdByPortalUserId: creatorId } });
+async function event(creatorId: string, ownerUniversityId?: string, initialTemplate = true) {
+  const record = await prisma.event.create({ data: { title: "Completed prototype Event", description: "Fixture", category: "Assembly", startsAt: new Date(Date.now() - 7200000), endsAt: new Date(Date.now() - 3600000), location: "Local", status: "DRAFT", ownerUniversityId, createdByPortalUserId: creatorId } });
+  if (initialTemplate) await prisma.eventEvaluationWindow.create({ data: { eventId: record.id, templateId: "b0000000-0000-4000-8000-000000000001", opensAt: record.endsAt, closesAt: new Date(record.endsAt.getTime() + 7 * 86400000) } });
+  return prisma.event.update({ where: { id: record.id }, data: { status: "PUBLISHED", publishedAt: new Date(Date.now() - 86400000) } });
 }
 const answers = [{ position: 0, rating: 4, comment: null }, { position: 1, rating: 5, comment: null }, { position: 2, rating: null, comment: "=HYPERLINK(\"https://example.org\")" }];
 
 describe("Event Evaluation privacy and windows", () => {
+  it("removes identifiable responses after two calendar years and audits only a count", async () => {
+    const admin = await actor("SUPER_ADMIN"); const oldUser = await actor("REPRESENTATIVE"); const recentUser = await actor("REPRESENTATIVE");
+    const record = await event(admin.user.id);
+    const old = await prisma.evaluationResponse.create({ data: { eventId: record.id, portalUserId: oldUser.user.id, submittedAt: new Date("2022-01-01T00:00:00Z"), answers: { create: answers } } });
+    const recent = await prisma.evaluationResponse.create({ data: { eventId: record.id, portalUserId: recentUser.user.id, submittedAt: new Date(), answers: { create: answers } } });
+    await expect(oldUser.feature.expireResponses(call({}))).rejects.toMatchObject({ code: "NOT_FOUND_OR_FORBIDDEN" });
+    expect(await admin.feature.expireResponses(call({}))).toEqual({ removed: 1 });
+    expect(await prisma.evaluationResponse.findUnique({ where: { id: old.id } })).toBeNull();
+    expect(await prisma.evaluationAnswer.count({ where: { responseId: old.id } })).toBe(0);
+    expect(await prisma.evaluationResponse.findUnique({ where: { id: recent.id } })).not.toBeNull();
+    expect(await prisma.auditLog.findFirst({ where: { action: "evaluation.responses_expired", actorPortalUserId: admin.user.id }, orderBy: { occurredAt: "desc" } })).toMatchObject({ metadata: { removedCount: 1 } });
+  });
   it("enforces eligibility, one response, optimistic editing and closed/cancelled windows", async () => {
     const admin = await actor("SUPER_ADMIN"); const rep = await actor("REPRESENTATIVE"); const late = await actor("REPRESENTATIVE", undefined, new Date(Date.now() - 1000));
     const record = await event(admin.user.id);
@@ -71,7 +85,8 @@ describe("Event Evaluation privacy and windows", () => {
     await admin.feature.createTemplate(call({ questions: [{ label: "A new rating", kind: "RATING" }] }));
     const after = (await admin.feature.list(call({}))).find(({ eventId }) => eventId === record.id)!;
     expect(after.questions).toEqual(before.questions); expect(after.templateVersion).toBe(before.templateVersion);
-    const next = await event(admin.user.id);
+    await expect(prisma.eventEvaluationWindow.update({ where: { eventId: record.id }, data: { templateId: (await admin.feature.templates(call({})))[0].id } })).rejects.toThrow();
+    const next = await event(admin.user.id, undefined, false);
     expect((await admin.feature.list(call({}))).find(({ eventId }) => eventId === next.id)!.questions).toEqual([{ label: "A new rating", kind: "RATING" }]);
     const template = (await admin.feature.templates(call({})))[0];
     await expect(prisma.evaluationTemplateVersion.update({ where: { id: template.id }, data: { questions: [] } })).rejects.toThrow();

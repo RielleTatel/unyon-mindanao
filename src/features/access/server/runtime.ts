@@ -12,6 +12,10 @@ export async function withSessionService<Result>(
     sessions: ReturnType<typeof createSessionService>,
   ) => Promise<Result>,
 ) {
+  if (process.env.PERSISTENCE_PROVIDER === "d1") {
+    const { withD1AccessRuntime } = await import("./d1-runtime");
+    return withD1AccessRuntime((sessions) => work(sessions));
+  }
   return withAccessRuntime<Record<string, never>, Result>(async (sessions) =>
     work(sessions),
   );

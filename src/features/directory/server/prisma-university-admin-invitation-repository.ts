@@ -321,8 +321,9 @@ async function retrySerialization<Result>(work: () => Promise<Result>): Promise<
         ("cause" in error && typeof error.cause === "object" && error.cause !== null && "originalCode" in error.cause && error.cause.originalCode === "40001")
       );
       if (!conflict) throw error;
-      if (attempt >= 5) throw new AccessError("OPERATION_FAILED", "Invitation acceptance is busy. Try again.");
-      await new Promise((resolve) => setTimeout(resolve, 20 * 2 ** attempt + Math.floor(Math.random() * 20)));
+      if (attempt >= 8) throw new AccessError("OPERATION_FAILED", "Invitation acceptance is busy. Try again.");
+      const ceiling = Math.min(500, 40 * 2 ** attempt);
+      await new Promise((resolve) => setTimeout(resolve, Math.floor(Math.random() * ceiling)));
     }
   }
 }

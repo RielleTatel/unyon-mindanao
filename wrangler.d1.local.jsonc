@@ -1,0 +1,35 @@
+{
+  // LOCAL DEVELOPMENT ONLY. This placeholder ID must never be used to deploy.
+  // Remote preview and production databases require their real IDs in wrangler.jsonc.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "unyon-mindanao-portal-d1-local",
+  "main": "dist/server/index.js",
+  "compatibility_date": "2026-09-16",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "APP_ENV": "local",
+    "FIREBASE_AUTH_EMULATOR_HOST": "127.0.0.1:9099",
+    "FIREBASE_PROJECT_ID": "unyon-mindanao-local",
+    "NEXT_PUBLIC_APP_ORIGIN": "http://127.0.0.1:8787",
+    "PERSISTENCE_PROVIDER": "d1"
+  },
+  "d1_databases": [
+    {
+      "binding": "PORTAL_DB",
+      "database_name": "unyon-mindanao-local-d1",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "database/d1/migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "PRIVATE_FILES",
+      "bucket_name": "unyon-private-files-d1-local"
+    }
+  ],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "dist/client",
+    "not_found_handling": "none"
+  }
+}

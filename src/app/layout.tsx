@@ -13,8 +13,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <html className="scroll-smooth motion-reduce:scroll-auto" data-scroll-behavior="smooth" lang="en">
-      <body className="m-0 bg-background font-sans text-foreground [text-rendering:optimizeLegibility]">
-        {children}
+      <body className="site-body m-0 bg-background font-sans text-foreground [text-rendering:optimizeLegibility]">
+        <a className="skip-link" href="#main-content">Skip to main content</a>
+        <div id="main-content">{children}</div>
       </body>
     </html>
   );

@@ -1,12 +1,88 @@
+import { ArrowUpRight, CalendarDays, FileCheck2, Megaphone } from "lucide-react";
 import Link from "next/link";
+
 import { portalMessages } from "@/shared/i18n/en";
+import { UnyonMark } from "@/shared/ui/unyon-mark";
+
+const featureIcons = [CalendarDays, Megaphone, FileCheck2];
 
 export function PortalShell() {
   const messages = portalMessages.shell;
-  return <main className="min-h-svh bg-[#fafaf6] px-6 sm:px-10"><div className="mx-auto max-w-5xl">
-    <header className="flex min-h-24 items-center justify-between gap-6 border-b border-primary/15"><Link href="/" aria-label={messages.homeLabel} className="text-sm font-bold tracking-[0.14em]">UNYON MINDANAO</Link><Link href="/sign-in" className="py-3 text-sm font-semibold hover:underline">{messages.signIn} <span aria-hidden="true">→</span></Link></header>
-    <section id="top" className="max-w-3xl py-20 sm:py-28"><p className="mb-5 text-xs font-semibold tracking-[0.14em] text-muted-foreground uppercase">{messages.heroEyebrow}</p><h1 className="font-serif text-5xl leading-tight tracking-tight sm:text-7xl">{messages.heroTitle}</h1><p className="mt-6 max-w-xl text-lg leading-8 text-muted-foreground">{messages.heroSummary}</p><Link href="/sign-in" className="mt-8 inline-block border-b border-primary py-2 font-semibold">{messages.signIn} <span aria-hidden="true">→</span></Link><p className="mt-4 text-sm text-muted-foreground">{messages.invitationNote}</p></section>
-    <section aria-labelledby="portal-areas-title" className="border-t border-primary/15 py-10"><h2 id="portal-areas-title" className="mb-6 font-serif text-2xl">{messages.areasTitle}</h2><div className="divide-y divide-primary/10">{messages.areas.map(({ label, description }) => <article key={label} className="grid gap-2 py-5 sm:grid-cols-[12rem_1fr] sm:gap-8"><h3 className="font-semibold">{label}</h3><p className="max-w-xl text-sm leading-6 text-muted-foreground">{description}</p></article>)}</div></section>
-    <footer className="flex flex-wrap justify-between gap-3 border-t border-primary/15 py-6 text-xs leading-5 text-muted-foreground"><span>{messages.organizationName}</span><span>{messages.accessNotice}</span></footer>
-  </div></main>;
+
+  return (
+    <main className="public-shell">
+      <header className="public-header">
+        <Link aria-label={messages.homeLabel} className="public-brand" href="/">
+          <UnyonMark />
+          <span className="public-brand__copy">
+            <strong>Unyon Mindanao</strong>
+            <span>Confederation portal</span>
+          </span>
+        </Link>
+        <Link className="public-sign-in" href="/sign-in">
+          {messages.signIn}
+          <ArrowUpRight aria-hidden="true" size={16} />
+        </Link>
+      </header>
+
+      <section className="public-hero">
+        <div className="public-hero__copy">
+          <p className="eyebrow">{messages.heroEyebrow}</p>
+          <h1>
+            One private space. <em>One shared current.</em>
+          </h1>
+          <p className="public-hero__summary">{messages.heroSummary}</p>
+          <div className="public-hero__actions">
+            <Link className="public-sign-in" href="/sign-in">
+              Enter the portal
+              <ArrowUpRight aria-hidden="true" size={16} />
+            </Link>
+            <span className="public-hero__note">{messages.invitationNote}</span>
+          </div>
+        </div>
+
+        <div aria-hidden="true" className="public-hero__art">
+          <div className="brand-pattern">
+            {Array.from({ length: 9 }, (_, index) => <span key={index} />)}
+          </div>
+          <div className="public-hero__seal">
+            <strong>Private</strong>
+            <span>For authorized Confederation officers</span>
+          </div>
+        </div>
+      </section>
+
+      <div className="public-band">
+        <section aria-labelledby="portal-areas-title" className="public-section">
+          <div className="public-section__heading">
+            <div>
+              <p className="eyebrow">{messages.areasEyebrow}</p>
+              <h2 id="portal-areas-title">{messages.areasTitle}</h2>
+            </div>
+            <p>{messages.networkNote}</p>
+          </div>
+          <div className="public-features">
+            {messages.areas.map(({ label, description }, index) => {
+              const Icon = featureIcons[index];
+              return (
+                <article className="public-feature" key={label}>
+                  <div className="public-feature__number">
+                    <span>0{index + 1}</span>
+                    <Icon aria-hidden="true" size={22} strokeWidth={1.5} />
+                  </div>
+                  <h3>{label}</h3>
+                  <p>{description}</p>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      </div>
+
+      <footer className="public-footer">
+        <span>{messages.organizationName}</span>
+        <span>{messages.accessNotice}</span>
+      </footer>
+    </main>
+  );
 }

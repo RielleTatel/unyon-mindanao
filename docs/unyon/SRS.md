@@ -102,7 +102,7 @@ The authenticated dashboard shall show upcoming events, recent Announcements, cu
 
 ## 4. Security and Privacy Requirements
 
-- Firebase shall establish identity only; PostgreSQL shall remain authoritative for roles, Appointments, resource ownership, and authorization.
+- Firebase shall establish identity only; Cloudflare D1 shall remain authoritative for roles, Appointments, resource ownership, and authorization.
 - Every protected read and mutation shall be authorized on the server using current database state.
 - Browser code shall never receive database credentials, storage credentials, Firebase administrative credentials, or unrestricted file URLs.
 - Scoped resources shall not reveal whether a forbidden record exists.
@@ -121,10 +121,10 @@ The authenticated dashboard shall show upcoming events, recent Announcements, cu
 ## 6. Platform and Operating Constraints
 
 - The application shall use Next.js App Router with TypeScript and deploy as a full-stack Cloudflare Worker through Vinext, with OpenNext as the tested fallback.
-- Prisma shall access Supabase PostgreSQL through a serverless-compatible pooled connection.
-- Cloudflare R2 shall store private images, PDFs, and encrypted database backups.
-- The pilot shall target free service tiers and monitor usage at 70%; 85% usage shall require archival or an approved upgrade.
-- Daily encrypted database backups shall retain seven daily and four weekly copies, with quarterly restore tests.
+- Server-only feature adapters shall access Cloudflare D1 using prepared SQLite statements and atomic batches; Prisma/PostgreSQL is not part of the target production data path.
+- Cloudflare R2 shall store private images, PDFs, and encrypted database exports/backups.
+- The pilot shall target free service tiers and monitor Workers, D1, and R2 usage; approaching a provider quota shall require archival, optimization, or an approved upgrade before service is affected.
+- D1 backup and recovery shall include encrypted exports to R2 and periodic restore tests; the retention schedule shall be finalized with the D1 export/restore implementation.
 - Free-tier pausing, quotas, and lack of an uptime SLA shall be disclosed to pilot stakeholders.
 
 ## 7. Capacity Assumptions

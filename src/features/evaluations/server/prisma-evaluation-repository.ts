@@ -43,6 +43,17 @@ export class PrismaEvaluationRepository implements EvaluationRepository {
     await this.transaction.evaluationTemplateVersion.create({ data: { version: (latest._max.version ?? 0) + 1, questions: questions.map((question) => ({ ...question })) } });
   }
   async count(id: string) { return this.transaction.evaluationResponse.count({ where: { eventId: id } }); }
+  async expireResponses(now: Date) {
+    // Answers cascade with each expired identifiable response. Audit only the count.
+    const [result] = await this.transaction.$queryRaw<{ count: number }[]>`
+      WITH removed AS (
+        DELETE FROM evaluation_responses
+        WHERE submitted_at < ${now}::timestamptz - INTERVAL '2 years'
+        RETURNING id
+      ) SELECT COUNT(*)::int AS count FROM removed
+    `;
+    return result.count;
+  }
   async results(id: string, attributable: boolean, questions: EvaluationQuestion[]): Promise<EvaluationResults> {
     const rows = await this.transaction.evaluationResponse.findMany({ where: { eventId: id }, select: { ...(attributable ? { portalUserId: true } : {}), answers: { select: { position: true, rating: true, comment: true } } } });
     const ratings = questions.flatMap((question, position) => {

@@ -1,20 +1,35 @@
 # Unyon Mindanao Portal
 
-Private portal for Unyon ng mga Estudyante sa Mindanao and its Member Universities. The application is being built as a modular monolith with Next.js, PostgreSQL, Firebase Authentication, and a Cloudflare Workers runtime.
+Private portal for Unyon ng mga Estudyante sa Mindanao and its Member Universities. The application is a modular monolith with a Cloudflare Workers runtime, Firebase Authentication, and a local D1 persistence target; the existing PostgreSQL path remains available during migration review.
 
-**Project status (September 21, 2026):** the branded application shell, access foundation, Member University directory, and University Admin invitation workflow are implemented and verified locally. The MVP remains in progress; Event publishing, Representative turnover, evaluations, communications, birthdays, financial reports, and private files remain future work. No production deployment has been made.
+**Project status (September 25, 2026):** the local MVP includes the portal workflows listed below and has been exercised in Workerd with D1 and the Firebase Auth Emulator. All 31 unit-test files (84 tests), lint, strict type checking, and the Cloudflare deployment dry-run check pass. PostgreSQL-to-D1 export/import and encrypted D1 backup/restore tooling are implemented and have passed synthetic-only local drills. No remote database was read or changed, and no production deployment or cutover has been made.
 
 ## Progress so far
 
 - **Application shell:** branded responsive sign-in and protected portal shell. Standard Next.js and Vinext/Cloudflare Worker development and build paths are available.
-- **Access foundation:** Firebase verifies identity and email; PostgreSQL is the authority for Portal Users, roles, Appointments, and current access. Secure sessions, typed protected operations, audit records, and local Super Admin bootstrap are implemented.
-- **Member University directory — latest update:** Super Admins can create, edit, archive, restore, list, and inspect Member Universities. PostgreSQL enforces normalized name and slug constraints. Mutations and redacted audit records share a transaction, and other roles are denied access to directory operations.
+- **Access foundation:** Firebase verifies identity and email; the D1 runtime stores Portal Users, roles, Appointments, sessions, and current access. Secure sessions, typed protected operations, audit records, and local Super Admin bootstrap are implemented. The PostgreSQL runtime remains available during migration review.
+- **Member University directory — latest update:** Super Admins can create, edit, archive, restore, list, and inspect Member Universities. Database constraints enforce normalized name and slug rules. Mutations and redacted audit records are persisted together, and other roles are denied access to directory operations.
 - **University Admin invitations — latest verified update:** Super Admins can issue and revoke seven-day invitations. Acceptance verifies the Firebase email, consumes the one-time token, creates or links the Portal User, and creates an Appointment transactionally. The email adapter uses Resend.
 - **Runtime coverage:** documented local verification includes module and PostgreSQL integration tests, desktop and mobile browser journeys, standard Next.js builds, Workers builds and local Wrangler/Workerd previews, and a deployment dry run. See [Runtime Proof](docs/unyon/RUNTIME_PROOF.md) for milestone details.
 
-The invitation update was verified on September 21, 2026. Validation passed for lint, strict type checking, Prisma validation, 37 module tests, 12 PostgreSQL integration tests, 10 desktop/mobile E2E cases on standard Next.js, and 10 on the generated Worker. Standard and Workers builds completed, and `pnpm deploy:check` completed without deploying. The Resend adapter was tested with a mocked provider response; no email was sent.
+The D1 feature update was verified locally on September 25, 2026. Wrangler applied all five D1 migrations in an isolated local database; 24 desktop/mobile browser journeys passed against local Workerd, D1, and Firebase Auth Emulator. The current unit suite passes 84 tests. The PostgreSQL export/import utility intentionally omits Portal Sessions; D1 backups preserve sessions and have passed row-count and content reconciliation in a separate local restore. Neither drill used production records.
 
-## Run locally
+## Review the D1-target prototype
+
+Requirements: Node.js 22 or later, pnpm 11, and the Firebase Auth Emulator.
+
+Copy `.env.example` to `.env.local`, change `LOCAL_SUPER_ADMIN_PASSWORD`, then start `pnpm auth:emulator` in one terminal. In another terminal run:
+
+```sh
+pnpm d1:migrate:local
+pnpm bootstrap:local:d1
+pnpm build:worker
+pnpm preview:worker:d1:local
+```
+
+Open `http://localhost:3000`. Wrangler, Firebase, and D1 use local-only configuration. See [Local MVP review](docs/unyon/LOCAL_MVP_REVIEW.md) for the review checklist, encrypted backup/restore commands, and migration guardrails. No command above deploys or contacts a remote D1 database.
+
+## PostgreSQL-backed Next.js reference path
 
 Requirements: Node.js 22 or later, pnpm 11, and Docker with Compose.
 
@@ -62,13 +77,13 @@ NEXT_PUBLIC_APP_ORIGIN=https://portal.example.test pnpm env:check:production
 
 `pnpm deploy:check` validates the Cloudflare package without deploying it.
 
-University Admin invitation email delivery requires `RESEND_API_KEY` and a verified `INVITATION_FROM_EMAIL` sender. Production and preview environment checks require both values. Local invitation sending also requires them; no invitation token is written to logs or the database.
+University Admin invitation email delivery requires `RESEND_API_KEY` and a verified `INVITATION_FROM_EMAIL` sender. Production requires both values; preview may omit both, in which case invitation delivery remains unavailable. If configured, both values must be valid together. Local invitation sending also requires them; no invitation token is written to logs or the database.
 
 ## Architecture
 
 Routes in `src/app/` adapt HTTP and rendering concerns to feature interfaces. Product workflows live in `src/features/`; privileged integrations live in `src/platform/`; reusable browser-safe code lives in `src/shared/`. Each feature exposes its server interface from `server/index.ts`. Browser code must not import Prisma, Firebase administration, server-only modules, or raw Cloudflare bindings.
 
-Firebase proves identity and verified email. PostgreSQL owns portal roles, Appointments, authorization state, and audit records. Cloudflare Workers deployment uses Vinext, while standard Next.js development and builds remain available. Prisma generates separate Node.js and Workerd clients behind one server-only adapter; do not import generated clients outside the database platform adapter and typed persistence boundary.
+Firebase proves identity and verified email. In the current local target, D1 owns Portal Users, Appointments, authorization state, and audit records; PostgreSQL remains in the repository as the existing reference/runtime until a reviewed migration and separately approved cutover. Cloudflare Workers uses Vinext, while standard Next.js development remains available. Keep database access behind server-only feature/persistence adapters.
 
 ## Project documents
 

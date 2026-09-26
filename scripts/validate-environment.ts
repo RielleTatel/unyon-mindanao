@@ -1,3 +1,5 @@
+import { config } from "dotenv";
+
 import {
   type AppEnvironment,
   EnvironmentConfigurationError,
@@ -11,6 +13,13 @@ if (!requestedEnvironment) {
     "Provide one environment: local, preview, or production",
   );
 }
+
+const environmentFile =
+  requestedEnvironment === "local"
+    ? ".env.local"
+    : `.env.${requestedEnvironment}.local`;
+
+config({ path: environmentFile, override: true, quiet: true });
 
 const environment = validateEnvironment(requestedEnvironment, process.env);
 

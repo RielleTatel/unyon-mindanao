@@ -71,7 +71,8 @@ describe("Private files and immutable Financial Reports", () => {
     const pending = await admin.files.reserve(call({ purpose: "PROFILE_IMAGE", resourceId: admin.user.id, mimeType: "image/png", size: png.length }));
     await expect(admin.files.upload(call({ id: pending.objectId, mimeType: "image/png", bytes: new Uint8Array(png.length) }))).rejects.toMatchObject({ code: "INVALID_INPUT" });
     await admin.files.upload(call({ id: pending.objectId, mimeType: "image/png", bytes: png }));
-    await expect(admin.files.upload(call({ id: pending.objectId, mimeType: "image/png", bytes: png }))).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(admin.files.upload(call({ id: pending.objectId, mimeType: "image/png", bytes: png }))).resolves.toEqual({ uploaded: true });
+    await expect(admin.files.upload(call({ id: pending.objectId, mimeType: "image/png", bytes: new Uint8Array([...png.slice(0, -1), 1]) }))).rejects.toMatchObject({ code: "CONFLICT" });
     await admin.files.commit(call({ id: pending.objectId }));
     const missing = await admin.files.reserve(call({ purpose: "PROFILE_IMAGE", resourceId: admin.user.id, mimeType: "image/png", size: png.length }));
     expect(await admin.files.commit(call({ id: missing.objectId }))).toEqual({ available: false });

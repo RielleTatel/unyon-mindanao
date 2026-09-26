@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
 
 import { config } from "dotenv";
-import { Client } from "pg";
 import { expect, test } from "@playwright/test";
+import { d1SqlString, executeLocalD1, queryLocalD1 } from "../fixtures/local-d1-cli";
 
 config({ path: ".env.local" });
 
@@ -17,43 +17,30 @@ test("a verified invited admin accepts a one-time invitation and enters its scop
   const token = randomToken();
   const email = `university-admin-${crypto.randomUUID()}@unyon.local`;
   const universityName = `Invitation Journey ${crypto.randomUUID()}`;
-  const databaseUrl = process.env.DATABASE_URL;
-
-  if (!databaseUrl) {
-    throw new Error("DATABASE_URL is required for the invitation browser journey");
-  }
-
-  const database = new Client({ connectionString: databaseUrl });
-  await database.connect();
-  const inviter = await database.query<{ id: string }>(
-    `SELECT id FROM portal_users WHERE email = $1 AND status = 'ACTIVE'`,
-    [localAdminEmail],
+  const inviters = queryLocalD1<{ id: string }>(
+    `SELECT id FROM portal_users WHERE email = ${d1SqlString(localAdminEmail)} AND status = 'ACTIVE' LIMIT 1`,
   );
-  const inviterId = inviter.rows[0]?.id;
+  const inviterId = inviters[0]?.id;
 
   if (!inviterId) {
-    await database.end();
-    throw new Error("Run the local Super Admin bootstrap before the browser journey");
+    throw new Error("Run the local D1 Super Admin bootstrap before the browser journey");
   }
 
   const universityId = randomUUID();
   const invitationId = randomUUID();
   const tokenHash = createHash("sha256").update(token).digest("hex");
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-
-  await database.query(
-    `INSERT INTO member_universities (id, name, slug, updated_at)
-     VALUES ($1, $2, $3, CURRENT_TIMESTAMP)`,
-    [universityId, universityName, `invitation-${randomUUID()}`],
-  );
-  await database.query(
-    `INSERT INTO invitations (
-       id, token_hash, email, role, university_id, invited_by_portal_user_id,
-       expires_at, updated_at
-     ) VALUES ($1, $2, $3, 'UNIVERSITY_ADMIN', $4, $5, $6, CURRENT_TIMESTAMP)`,
-    [invitationId, tokenHash, email, universityId, inviterId, expiresAt],
-  );
-  await database.end();
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  executeLocalD1(`
+    INSERT INTO member_universities (id, name, slug) VALUES (
+      ${d1SqlString(universityId)}, ${d1SqlString(universityName)}, ${d1SqlString(`invitation-${randomUUID()}`)}
+    );
+    INSERT INTO invitations (
+      id, token_hash, email, role, university_id, invited_by_portal_user_id, expires_at
+    ) VALUES (
+      ${d1SqlString(invitationId)}, ${d1SqlString(tokenHash)}, ${d1SqlString(email)},
+      'UNIVERSITY_ADMIN', ${d1SqlString(universityId)}, ${d1SqlString(inviterId)}, ${d1SqlString(expiresAt)}
+    );
+  `);
 
   const password = "invited-admin-password";
   await page.goto(`/accept-invitation#${token}`);

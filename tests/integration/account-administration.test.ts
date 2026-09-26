@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { config } from "dotenv";
 import { afterAll, describe, expect, it } from "vitest";
-import { createAccessPersistence, type PortalRole } from "@/features/access/server";
+import { createAccessPersistence, createAuditHistoryFeature, PrismaAuditHistoryRepository, type PortalRole } from "@/features/access/server";
 import { createAccountFeature, PrismaAccountRepository } from "@/features/directory/server";
 import { createPrismaClient } from "@/platform/database/client";
 config({ path: ".env.local", quiet: true });
@@ -20,6 +20,18 @@ async function actor(role: PortalRole) {
   return { user, appointment, persistence, tokenHash, feature: createAccountFeature({ transactions: persistence.transactions, identityVerifier, sessions: { hashSessionToken: async () => tokenHash } }) };
 }
 describe("Account administration", () => {
+  it("limits audit history to Super Admins and returns redacted fields", async () => {
+    const admin = await actor("SUPER_ADMIN"); const rep = await actor("REPRESENTATIVE");
+    const featureFor = (tokenHash: string) => {
+      const persistence = createAccessPersistence(prisma, (transaction) => ({ auditHistory: new PrismaAuditHistoryRepository(transaction) }));
+      return createAuditHistoryFeature({ transactions: persistence.transactions, sessions: { hashSessionToken: async () => tokenHash } });
+    };
+    await admin.feature.list(call({}));
+    const records = await featureFor(admin.tokenHash).recent(call({}));
+    expect(records.length).toBeGreaterThan(0);
+    expect(Object.keys(records[0]).sort()).toEqual(["action", "actorName", "id", "occurredAt", "resourceId", "resourceType"]);
+    await expect(featureFor(rep.tokenHash).recent(call({}))).rejects.toMatchObject({ code: "NOT_FOUND_OR_FORBIDDEN" });
+  });
   it("requires fresh password, preserves history and never revives revoked sessions on restore", async () => {
     const admin = await actor("SUPER_ADMIN"); const target = await actor("UNIVERSITY_ADMIN");
     await expect(admin.feature.setStatus(call({ id: target.user.id, status: "DISABLED", idToken: "stale" }))).rejects.toMatchObject({ code: "RECENT_AUTHENTICATION_REQUIRED" });

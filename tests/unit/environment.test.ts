@@ -50,6 +50,54 @@ describe("environment validation", () => {
     });
   });
 
+  it("allows preview without invitation email while keeping production strict", () => {
+    const services = {
+      DATABASE_URL: productionServices.DATABASE_URL,
+      FIREBASE_PROJECT_ID: productionServices.FIREBASE_PROJECT_ID,
+      NEXT_PUBLIC_FIREBASE_API_KEY:
+        productionServices.NEXT_PUBLIC_FIREBASE_API_KEY,
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN:
+        productionServices.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID:
+        productionServices.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    };
+
+    expect(
+      validateEnvironment("preview", {
+        ...services,
+        NEXT_PUBLIC_APP_ORIGIN: "https://preview.unyon.example",
+      }),
+    ).toEqual({
+      appEnvironment: "preview",
+      appOrigin: "https://preview.unyon.example",
+    });
+
+    expect(() =>
+      validateEnvironment("production", {
+        ...services,
+        NEXT_PUBLIC_APP_ORIGIN: "https://portal.unyon.example",
+      }),
+    ).toThrow("RESEND_API_KEY is required");
+  });
+
+  it("requires preview invitation email settings to be provided as a valid pair", () => {
+    expect(() =>
+      validateEnvironment("preview", {
+        ...productionServices,
+        NEXT_PUBLIC_APP_ORIGIN: "https://preview.unyon.example",
+        INVITATION_FROM_EMAIL: undefined,
+      }),
+    ).toThrow("must be configured together");
+
+    expect(() =>
+      validateEnvironment("preview", {
+        ...productionServices,
+        NEXT_PUBLIC_APP_ORIGIN: "https://preview.unyon.example",
+        INVITATION_FROM_EMAIL: "not-an-email",
+      }),
+    ).toThrow("must be a valid email address");
+  });
+
   it("rejects emulator settings outside local development", () => {
     expect(() =>
       validateEnvironment("production", {
@@ -74,6 +122,8 @@ describe("environment validation", () => {
   it("requires non-local PostgreSQL and matching Firebase projects outside local", () => {
     expect(() =>
       validateEnvironment("production", {
+        ...productionServices,
+        DATABASE_URL: undefined,
         NEXT_PUBLIC_APP_ORIGIN: "https://portal.unyon.example",
       }),
     ).toThrow("DATABASE_URL is required");
@@ -93,5 +143,25 @@ describe("environment validation", () => {
         NEXT_PUBLIC_FIREBASE_PROJECT_ID: "different-project",
       }),
     ).toThrow("project IDs must match");
+  });
+
+  it("allows D1 deployments without a PostgreSQL connection string", () => {
+    const d1Services = { ...productionServices, DATABASE_URL: undefined };
+    expect(validateEnvironment("preview", {
+      ...d1Services,
+      NEXT_PUBLIC_APP_ORIGIN: "https://preview.unyon.example",
+      PERSISTENCE_PROVIDER: "d1",
+    })).toEqual({
+      appEnvironment: "preview",
+      appOrigin: "https://preview.unyon.example",
+    });
+  });
+
+  it("rejects unknown persistence providers", () => {
+    expect(() => validateEnvironment("preview", {
+      ...productionServices,
+      NEXT_PUBLIC_APP_ORIGIN: "https://preview.unyon.example",
+      PERSISTENCE_PROVIDER: "kv",
+    })).toThrow("PERSISTENCE_PROVIDER must be postgres or d1");
   });
 });

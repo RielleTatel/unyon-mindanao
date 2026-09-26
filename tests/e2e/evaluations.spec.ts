@@ -1,18 +1,32 @@
 import { randomUUID } from "node:crypto";
 import { config } from "dotenv";
 import { expect, test } from "@playwright/test";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "../../src/platform/database/generated-node/client";
+import { d1SqlString, executeLocalD1, queryLocalD1 } from "../fixtures/local-d1-cli";
 config({ path: ".env.local", quiet: true });
 
 test("submits, edits, discloses and closes an Event Evaluation", async ({ page }) => {
-  if (process.env.APP_ENV !== "local" || !["localhost", "127.0.0.1"].includes(new URL(process.env.DATABASE_URL!).hostname)) throw new Error("Local fixture database required");
-  const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
+  const eventId = randomUUID();
   const title = `Evaluation journey ${randomUUID().slice(0, 8)}`;
-  try {
-    const user = await prisma.portalUser.findUniqueOrThrow({ where: { email: process.env.LOCAL_SUPER_ADMIN_EMAIL! } });
-    await prisma.event.create({ data: { title, description: "Completed local browser fixture", category: "Assembly", startsAt: new Date(Date.now() - 7200000), endsAt: new Date(Date.now() - 60000), location: "Local", status: "PUBLISHED", publishedAt: new Date(Date.now() - 86400000), createdByPortalUserId: user.id } });
-  } finally { await prisma.$disconnect(); }
+  const users = queryLocalD1<{ id: string }>(
+    `SELECT id FROM portal_users WHERE email = ${d1SqlString(process.env.LOCAL_SUPER_ADMIN_EMAIL!)} AND status = 'ACTIVE' LIMIT 1`,
+  );
+  const user = users[0];
+  if (!user) throw new Error("Run the local D1 Super Admin bootstrap before the browser journey");
+  const startsAt = new Date(Date.now() - 7_200_000).toISOString();
+  const endsAt = new Date(Date.now() - 60_000).toISOString();
+  const publishedAt = new Date(Date.now() - 86_400_000).toISOString();
+  const now = new Date().toISOString();
+  executeLocalD1(`
+    INSERT INTO events (
+      id, title, description, category, status, starts_at, ends_at, all_day,
+      location, created_by_portal_user_id, published_at, created_at, updated_at
+    ) VALUES (
+      ${d1SqlString(eventId)}, ${d1SqlString(title)}, 'Completed local browser fixture',
+      'Assembly', 'PUBLISHED', ${d1SqlString(startsAt)}, ${d1SqlString(endsAt)},
+      0, 'Local', ${d1SqlString(user.id)}, ${d1SqlString(publishedAt)},
+      ${d1SqlString(now)}, ${d1SqlString(now)}
+    );
+  `);
   await page.goto("/sign-in");
   await page.getByLabel("Email address").fill(process.env.LOCAL_SUPER_ADMIN_EMAIL!);
   await page.getByLabel("Password").fill(process.env.LOCAL_SUPER_ADMIN_PASSWORD!);

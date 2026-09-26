@@ -1,23 +1,18 @@
 import { createHash, randomUUID } from "node:crypto";
 
 import { config } from "dotenv";
-import { Client } from "pg";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { d1SqlString, executeLocalD1, queryLocalD1 } from "../fixtures/local-d1-cli";
 
 config({ path: ".env.local" });
 
 const superAdminEmail = process.env.LOCAL_SUPER_ADMIN_EMAIL ?? "admin@unyon.local";
 const invitationPassword = "invited-officer-password";
+const appOrigin = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 
 test.setTimeout(120_000);
 
 test("University Admin publishes an event, a Representative views it, and turnover revokes access", async ({ page, request, browser }) => {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) throw new Error("DATABASE_URL is required for the event browser journey");
-
-  const database = new Client({ connectionString: databaseUrl });
-  await database.connect();
-
   const suffix = randomUUID();
   const universityId = randomUUID();
   const universityName = `Events Journey ${suffix}`;
@@ -29,25 +24,26 @@ test("University Admin publishes an event, a Representative views it, and turnov
   let eventId: string | null = null;
   let representativeInvitationId: string | null = null;
   let representativeToken: string | null = null;
+  let adminInvitationIdSeeded = false;
+  let universitySeeded = false;
 
   try {
-    const inviterResult = await database.query<{ id: string }>(
-      "SELECT id FROM portal_users WHERE email = $1 AND status = 'ACTIVE'",
-      [superAdminEmail],
+    const inviterResult = queryLocalD1<{ id: string }>(
+      `SELECT id FROM portal_users WHERE email = ${d1SqlString(superAdminEmail)} AND status = 'ACTIVE' LIMIT 1`,
     );
-    const inviterId = inviterResult.rows[0]?.id;
+    const inviterId = inviterResult[0]?.id;
     if (!inviterId) throw new Error("Run the local Super Admin bootstrap before the browser journey");
 
-    await database.query(
-      `INSERT INTO member_universities (id, name, slug, updated_at)
-       VALUES ($1, $2, $3, CURRENT_TIMESTAMP)`,
-      [universityId, universityName, `events-${suffix}`],
-    );
-    await database.query(
-      `INSERT INTO invitations (id, token_hash, email, role, university_id, invited_by_portal_user_id, expires_at, updated_at)
-       VALUES ($1, $2, $3, 'UNIVERSITY_ADMIN', $4, $5, CURRENT_TIMESTAMP + INTERVAL '7 days', CURRENT_TIMESTAMP)`,
-      [adminInvitationId, adminTokenHash, adminEmail, universityId, inviterId],
-    );
+    const adminExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    executeLocalD1(`
+      INSERT INTO member_universities (id, name, slug)
+      VALUES (${d1SqlString(universityId)}, ${d1SqlString(universityName)}, ${d1SqlString(`events-${suffix}`)});
+      INSERT INTO invitations (id, token_hash, email, role, university_id, invited_by_portal_user_id, expires_at)
+      VALUES (${d1SqlString(adminInvitationId)}, ${d1SqlString(adminTokenHash)}, ${d1SqlString(adminEmail)},
+        'UNIVERSITY_ADMIN', ${d1SqlString(universityId)}, ${d1SqlString(inviterId)}, ${d1SqlString(adminExpiresAt)});
+    `);
+    universitySeeded = true;
+    adminInvitationIdSeeded = true;
 
     await acceptInvitation(page, request, adminToken, adminEmail, "Journey University Admin", universityName, "University Admin");
     await expect(page.getByRole("link", { name: "Team" })).toBeVisible();
@@ -70,16 +66,21 @@ test("University Admin publishes an event, a Representative views it, and turnov
     await eventCard.getByRole("button", { name: "Publish event" }).click();
     await expect(eventCard.getByText("published", { exact: true })).toBeVisible();
 
-    const adminResult = await database.query<{ id: string }>("SELECT id FROM portal_users WHERE email = $1", [adminEmail]);
-    const adminUserId = adminResult.rows[0]?.id;
+    const adminResult = queryLocalD1<{ id: string }>(
+      `SELECT id FROM portal_users WHERE email = ${d1SqlString(adminEmail)} LIMIT 1`,
+    );
+    const adminUserId = adminResult[0]?.id;
     if (!adminUserId) throw new Error("University Admin invitation did not create a Portal User");
     representativeToken = invitationToken();
     representativeInvitationId = randomUUID();
-    await database.query(
-      `INSERT INTO invitations (id, token_hash, email, role, university_id, invited_by_portal_user_id, expires_at, updated_at)
-       VALUES ($1, $2, $3, 'REPRESENTATIVE', $4, $5, CURRENT_TIMESTAMP + INTERVAL '7 days', CURRENT_TIMESTAMP)`,
-      [representativeInvitationId, createHash("sha256").update(representativeToken).digest("hex"), representativeEmail, universityId, adminUserId],
-    );
+    const representativeExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    executeLocalD1(`
+      INSERT INTO invitations (id, token_hash, email, role, university_id, invited_by_portal_user_id, expires_at)
+      VALUES (${d1SqlString(representativeInvitationId)},
+        ${d1SqlString(createHash("sha256").update(representativeToken).digest("hex"))},
+        ${d1SqlString(representativeEmail)}, 'REPRESENTATIVE', ${d1SqlString(universityId)},
+        ${d1SqlString(adminUserId)}, ${d1SqlString(representativeExpiresAt)});
+    `);
 
     await acceptInvitation(page, request, representativeToken, representativeEmail, "Journey Representative", universityName, "Representative");
     await page.goto("/portal/events?view=calendar");
@@ -91,12 +92,12 @@ test("University Admin publishes an event, a Representative views it, and turnov
     const adminPage = await browser.newPage({ viewport: page.viewportSize() });
     adminPage.setDefaultTimeout(10_000);
     try {
-      await adminPage.goto("http://localhost:3000/sign-in");
+      await adminPage.goto(new URL("/sign-in", appOrigin).toString());
       await adminPage.getByLabel("Email address", { exact: true }).fill(adminEmail);
       await adminPage.getByLabel("Password", { exact: true }).fill(invitationPassword);
       await adminPage.getByRole("button", { name: "Sign in securely", exact: true }).click();
       await expect(adminPage).toHaveURL(/\/portal$/u);
-      await adminPage.goto("http://localhost:3000/portal/birthdays?month=2");
+      await adminPage.goto(new URL("/portal/birthdays?month=2", appOrigin).toString());
       await adminPage.getByLabel("Portal User", { exact: true }).selectOption({ label: "Journey Representative" });
       await adminPage.getByLabel("Confirm your password").fill(invitationPassword);
       await adminPage.getByRole("button", { name: "View full birth date" }).click();
@@ -109,7 +110,7 @@ test("University Admin publishes an event, a Representative views it, and turnov
       await expect(page.getByText("February 29", { exact: true })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Manage birth dates" })).toHaveCount(0);
       expect(await page.content()).not.toContain("2000-02-29");
-      await adminPage.goto("http://localhost:3000/portal");
+      await adminPage.goto(new URL("/portal", appOrigin).toString());
       await adminPage.getByRole("link", { name: "Team", exact: true }).click();
       const officer = adminPage.getByRole("listitem").filter({ has: adminPage.getByRole("heading", { name: "Journey Representative", exact: true }) });
       await expect(officer).toContainText("Active");
@@ -123,13 +124,24 @@ test("University Admin publishes an event, a Representative views it, and turnov
       await adminPage.close();
     }
   } finally {
-    await database.query("UPDATE invitations SET status = 'REVOKED', revoked_at = CURRENT_TIMESTAMP WHERE id = ANY($1::uuid[]) AND status = 'PENDING'", [[adminInvitationId, ...(representativeInvitationId ? [representativeInvitationId] : [])]]);
-    if (eventId) {
-      await database.query("UPDATE events SET status = 'ARCHIVED', archived_at = CURRENT_TIMESTAMP, version = version + 1 WHERE id = $1", [eventId]);
+    const cleanupTime = new Date().toISOString();
+    const invitationIds = [
+      ...(adminInvitationIdSeeded ? [adminInvitationId] : []),
+      ...(representativeInvitationId ? [representativeInvitationId] : []),
+    ];
+    const cleanup: string[] = [];
+    if (invitationIds.length > 0) {
+      const ids = invitationIds.map(d1SqlString).join(", ");
+      cleanup.push(`UPDATE invitations SET status = 'REVOKED', revoked_at = ${d1SqlString(cleanupTime)}, updated_at = ${d1SqlString(cleanupTime)} WHERE id IN (${ids}) AND status = 'PENDING';`);
     }
-    await database.query("UPDATE appointments SET ends_at = CURRENT_TIMESTAMP WHERE university_id = $1 AND ends_at IS NULL", [universityId]);
-    await database.query("UPDATE member_universities SET status = 'ARCHIVED', updated_at = CURRENT_TIMESTAMP WHERE id = $1", [universityId]);
-    await database.end();
+    if (eventId) {
+      cleanup.push(`UPDATE events SET status = 'ARCHIVED', archived_at = ${d1SqlString(cleanupTime)}, version = version + 1, updated_at = ${d1SqlString(cleanupTime)} WHERE id = ${d1SqlString(eventId)} AND status <> 'ARCHIVED';`);
+    }
+    if (universitySeeded) {
+      cleanup.push(`UPDATE appointments SET ends_at = ${d1SqlString(cleanupTime)} WHERE university_id = ${d1SqlString(universityId)} AND ends_at IS NULL;`);
+      cleanup.push(`UPDATE member_universities SET status = 'ARCHIVED', updated_at = ${d1SqlString(cleanupTime)} WHERE id = ${d1SqlString(universityId)} AND status = 'ACTIVE';`);
+    }
+    if (cleanup.length > 0) executeLocalD1(cleanup.join("\n"));
   }
 });
 

@@ -131,8 +131,8 @@ export function InvitationAcceptance() {
   }
 
   return (
-    <main className="grid min-h-svh place-items-center bg-background px-4 py-10">
-      <section className="w-full max-w-xl rounded-3xl border border-primary/15 bg-card p-6 shadow-[0_16px_48px_rgba(24,59,44,0.08)] sm:p-10">
+    <main className="auth-page">
+      <section className="invitation-card w-full max-w-xl rounded-[1.5rem_4rem_1.5rem_1.5rem] border border-primary/15 bg-card p-6 shadow-[0_22px_65px_rgba(20,56,40,0.14)] sm:p-10">
         <Link className="text-sm font-bold text-primary underline-offset-4 hover:underline" href="/sign-in">
           ← Sign in
         </Link>

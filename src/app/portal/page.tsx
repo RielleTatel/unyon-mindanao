@@ -1,10 +1,9 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowUpRight, CalendarDays, ShieldCheck, UsersRound, Waves } from "lucide-react";
+import { ArrowUpRight, CalendarDays, ShieldCheck, UsersRound } from "lucide-react";
 
 import { AccessError, sessionCookieName, withSessionService } from "@/features/access/server";
-import { SignOutButton } from "@/features/access/ui/sign-out-button";
 import { loadDashboard } from "@/features/dashboard/server";
 
 export const dynamic = "force-dynamic";
@@ -32,32 +31,9 @@ export default async function PortalPage() {
   const upcomingEvents = dashboard.events;
 
   return (
-    <main className="min-h-svh bg-[#fafaf6] px-4 py-5 sm:px-8 sm:py-8">
+    <main className="min-h-svh px-4 py-8 sm:px-8 sm:py-12">
       <div className="mx-auto max-w-5xl">
-        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-primary/15 pb-5">
-          <Link className="flex items-center gap-3 text-foreground no-underline" href="/portal">
-            <Waves aria-hidden="true" size={22} />
-            <span><span className="block text-[0.65rem] font-bold tracking-[0.17em] text-primary">PRIVATE PORTAL</span><span className="text-sm font-extrabold tracking-[0.1em]">UNYON MINDANAO</span></span>
-          </Link>
-          <div className="flex flex-wrap items-center gap-3">
-            <nav aria-label="Portal navigation" className="flex flex-wrap items-center gap-1">
-              <Link className="rounded-lg bg-[#e7efdc] px-3 py-2 text-xs font-bold text-primary no-underline" href="/portal">Home</Link>
-              <Link className="rounded-lg px-3 py-2 text-xs font-bold text-foreground no-underline hover:bg-muted" href="/portal/events">Events</Link>
-              <Link className="rounded-lg px-3 py-2 text-xs font-bold text-foreground no-underline hover:bg-muted" href="/portal/birthdays">Birthdays</Link>
-              <Link className="rounded-lg px-3 py-2 text-xs font-bold text-foreground no-underline hover:bg-muted" href="/portal/announcements">Announcements</Link>
-              <Link className="rounded-lg px-3 py-2 text-xs font-bold text-foreground no-underline hover:bg-muted" href="/portal/shortcuts">Shortcuts</Link>
-              <Link className="px-3 py-2 text-xs font-bold hover:underline" href="/portal/financial-reports">Financial Reports</Link>
-              <Link className="px-3 py-2 text-xs font-bold hover:underline" href="/portal/profile">Profile</Link>
-              <Link className="px-3 py-2 text-xs font-bold hover:underline" href="/portal/evaluations">Evaluations</Link>
-              {isUniversityAdmin || isSuperAdmin ? <Link className="rounded-lg px-3 py-2 text-xs font-bold text-foreground no-underline hover:bg-muted" href="/portal/team">Team</Link> : null}
-              {isSuperAdmin ? <Link className="rounded-lg px-3 py-2 text-xs font-bold text-foreground no-underline hover:bg-muted" href="/portal/universities">Directory</Link> : null}
-              {isSuperAdmin ? <Link className="px-3 py-2 text-xs font-bold hover:underline" href="/portal/accounts">Accounts</Link> : null}
-            </nav>
-            <SignOutButton />
-          </div>
-        </header>
-
-        <section className="grid gap-8 py-9 sm:py-14 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <section className="grid gap-8 rounded-[2rem_5rem_2rem_2rem] border border-primary/15 bg-card p-6 shadow-[0_22px_65px_rgba(20,56,40,0.1)] sm:p-10 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div>
             <p className="mb-4 flex items-center gap-2 text-xs font-extrabold tracking-[0.15em] text-primary uppercase"><ShieldCheck aria-hidden="true" size={17} />Authorized portal session</p>
             <h1 className="m-0 max-w-3xl font-serif text-4xl leading-tight font-medium tracking-tight sm:text-5xl">Welcome to your Confederation workspace.</h1>
@@ -78,6 +54,12 @@ export default async function PortalPage() {
             {isSuperAdmin ? <Link className="mt-4 inline-flex text-sm font-bold text-primary underline-offset-4 hover:underline" href="/portal/universities">Manage Member Universities <ArrowUpRight aria-hidden="true" className="ml-1" size={15} /></Link> : null}
           </aside>
         </section>
+        {(isSuperAdmin || isUniversityAdmin) && <section className="border-t border-primary/15 py-8" aria-labelledby="administrative-tasks"><h2 id="administrative-tasks" className="font-serif text-3xl">Administrative tasks</h2><div className="mt-4 divide-y divide-primary/10">
+          <Link className="block py-3 text-sm font-semibold hover:underline" href="/portal/events">Draft and publish an Event →</Link>
+          <Link className="block py-3 text-sm font-semibold hover:underline" href="/portal/team">Invite a Representative or end an Appointment →</Link>
+          <Link className="block py-3 text-sm font-semibold hover:underline" href="/portal/birthdays">Manage birth dates →</Link>
+          {isSuperAdmin && <><Link className="block py-3 text-sm font-semibold hover:underline" href="/portal/accounts">Manage Portal Users and retention →</Link><Link className="block py-3 text-sm font-semibold hover:underline" href="/portal/financial-reports">Publish a Financial Report →</Link><Link className="block py-3 text-sm font-semibold hover:underline" href="/portal/evaluations">Review Evaluation results →</Link><Link className="block py-3 text-sm font-semibold hover:underline" href="/portal/audit">Review audit activity →</Link></>}
+        </div></section>}
         <section className="border-t border-primary/15 py-8" aria-labelledby="recent-announcements"><div className="flex items-center justify-between gap-4"><h2 id="recent-announcements" className="font-serif text-3xl">Recent Announcements</h2><Link className="text-sm underline" href="/portal/announcements">View all</Link></div>{dashboard.announcements.length ? dashboard.announcements.map((announcement) => <article key={announcement.id} className="border-b border-primary/10 py-5"><h3 className="font-semibold">{announcement.title}</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">{announcement.excerpt}</p></article>) : <p className="py-5 text-sm text-muted-foreground">No recent Announcements.</p>}</section>
         <section className="border-t border-primary/15 py-8" aria-labelledby="monthly-birthdays"><div className="flex items-center justify-between gap-4"><h2 id="monthly-birthdays" className="font-serif text-3xl">Birthdays this month</h2><Link className="text-sm underline" href="/portal/birthdays">Birthday calendar</Link></div>{dashboard.birthdays.length ? <ul className="divide-y divide-primary/10">{dashboard.birthdays.map((birthday) => <li key={birthday.portalUserId} className="flex gap-5 py-3"><span className="w-8 text-muted-foreground">{birthday.day}</span><span>{birthday.fullName}</span></li>)}</ul> : <p className="py-5 text-sm text-muted-foreground">No birthdays recorded this month.</p>}</section>
         <section className="border-t border-primary/15 py-8" aria-labelledby="open-evaluations"><div className="flex items-center justify-between gap-4"><h2 id="open-evaluations" className="font-serif text-3xl">Open Evaluations</h2><Link className="text-sm underline" href="/portal/evaluations">View Evaluations</Link></div>{dashboard.evaluations.length ? <ul className="divide-y divide-primary/10">{dashboard.evaluations.map((evaluation) => <li key={evaluation.eventId} className="py-4"><p className="font-semibold">{evaluation.title}</p><p className="text-sm text-muted-foreground">{evaluation.submitted ? "Response saved — you can still edit" : "Awaiting your feedback"} · Closes {formatEventStart(evaluation.closesAt, false)}</p></li>)}</ul> : <p className="py-5 text-sm text-muted-foreground">No Evaluations currently awaiting your feedback.</p>}</section>

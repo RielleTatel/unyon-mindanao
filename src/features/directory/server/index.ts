@@ -1,6 +1,6 @@
 import "server-only";
-export { withProfileFeature } from "./profile";
-export { withAccountFeature, createAccountFeature, PrismaAccountRepository } from "./account-administration";
+export { withProfileFeature, createProfileFeature, type ProfileRepository, type ProfileRecord } from "./profile";
+export { withAccountFeature, createAccountFeature, PrismaAccountRepository, type AccountRepository } from "./account-administration";
 
 export { createBirthdayFeature, type BirthdayRepository } from "./birthdays";
 export { withBirthdayFeature } from "./birthday-runtime";

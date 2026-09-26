@@ -8,7 +8,7 @@ describe("Portal shell", () => {
     render(<PortalShell />);
 
     expect(
-      screen.getByRole("heading", { name: "One private space for Unyon Mindanao" }),
+      screen.getByRole("heading", { name: "One private space. One shared current." }),
     ).toBeInTheDocument();
     expect(
       screen.getByText("Events, updates, and shared records—kept in one governed portal."),

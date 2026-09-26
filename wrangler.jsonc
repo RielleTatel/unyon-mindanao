@@ -12,7 +12,14 @@
   },
   "env": {
     "preview": {
-      "name": "unyon-mindanao-portal-preview"
+      "name": "unyon-mindanao-portal-preview",
+      "r2_buckets": [{ "binding": "PRIVATE_FILES", "bucket_name": "unyon-private-files-preview" }],
+      "vars": {
+        "APP_ENV": "preview",
+        "FIREBASE_PROJECT_ID": "unyon-mindanao",
+        "NEXT_PUBLIC_APP_ORIGIN": "https://unyon-mindanao-portal-preview.tatelgabrielle19.workers.dev"
+      },
+      "secrets": { "required": ["DATABASE_URL"] }
     }
   }
 }

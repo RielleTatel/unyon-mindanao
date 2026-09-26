@@ -1,4 +1,6 @@
 import "server-only";
+export { withAuditHistory, createAuditHistoryFeature, PrismaAuditHistoryRepository } from "./audit-history";
+export { verifyRecentPasswordForSession } from "./recent-password-runtime";
 export { retryDatabaseTransactions } from "./retry-database-transactions";
 
 export { requireRecentPassword } from "./recent-password";
@@ -33,6 +35,7 @@ export {
   createAccessPersistence,
   type AccessPersistence,
 } from "./persistence";
+export { createD1AccessPersistence } from "./d1-persistence";
 export { createProtectedOperationFactory } from "./protected-operation";
 export { withAccessRuntime, withSessionService } from "./runtime";
 export {
