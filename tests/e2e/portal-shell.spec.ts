@@ -4,7 +4,7 @@ test("Portal User sees the private Confederation workspace", async ({ page }) =>
   await page.goto("/");
 
   await expect(
-    page.getByRole("heading", { name: "One private space for Unyon Mindanao" }),
+    page.getByRole("heading", { name: "One private space. One shared current." }),
   ).toBeVisible();
   await expect(page.getByText("Authorized access only")).toBeVisible();
   const signInLink = page.getByRole("link", { name: "Sign in" }).first();

@@ -14,6 +14,11 @@ test("a verified invited admin accepts a one-time invitation and enters its scop
   page,
   request,
 }) => {
+  test.skip(
+    process.env.E2E_PERSISTENCE_PROVIDER !== "d1",
+    "This journey seeds D1 directly and runs in the Worker E2E suite.",
+  );
+
   const token = randomToken();
   const email = `university-admin-${crypto.randomUUID()}@unyon.local`;
   const universityName = `Invitation Journey ${crypto.randomUUID()}`;

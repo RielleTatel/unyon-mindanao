@@ -13,6 +13,11 @@ const appOrigin = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 test.setTimeout(120_000);
 
 test("University Admin publishes an event, a Representative views it, and turnover revokes access", async ({ page, request, browser }) => {
+  test.skip(
+    process.env.E2E_PERSISTENCE_PROVIDER !== "d1",
+    "This journey seeds D1 directly and runs in the Worker E2E suite.",
+  );
+
   const suffix = randomUUID();
   const universityId = randomUUID();
   const universityName = `Events Journey ${suffix}`;

@@ -9,7 +9,7 @@ test("publishes a private PDF and preserves the superseded revision", async ({ p
   await page.getByLabel("Password").fill(process.env.LOCAL_SUPER_ADMIN_PASSWORD!);
   await page.getByRole("button", { name: "Sign in securely" }).click();
   await expect(page).toHaveURL(/\/portal$/u);
-  await page.getByRole("link", { name: "Financial Reports", exact: true }).click();
+  await page.getByRole("link", { name: "Reports", exact: true }).click();
   const title = `Local report ${randomUUID().slice(0, 8)}`;
   await page.getByLabel("Title", { exact: true }).fill(title);
   await page.getByLabel("Reporting period").fill("September 2026");

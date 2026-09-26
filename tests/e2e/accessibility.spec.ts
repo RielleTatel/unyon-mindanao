@@ -5,15 +5,36 @@ import { config } from "dotenv";
 config({ path: ".env.local", quiet: true });
 
 async function expectNoAccessibilityViolations(page: Page) {
+  await page.evaluate(async () => {
+    const finiteAnimations = document
+      .getAnimations()
+      .filter(
+        (animation) =>
+          animation.playState === "running" &&
+          animation.effect?.getComputedTiming().iterations !== Infinity,
+      );
+    await Promise.all(finiteAnimations.map((animation) => animation.finished.catch(() => undefined)));
+  });
+
   const { violations } = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22a", "wcag22aa"]).analyze();
-  expect(violations.map(({ id, impact, nodes }) => ({ id, impact, count: nodes.length })), `WCAG violations at ${page.url()}`).toEqual([]);
+  expect(
+    violations.map(({ id, impact, nodes }) => ({
+      id,
+      impact,
+      nodes: nodes.map(({ target, any }) => ({
+        target,
+        checks: any.map(({ data }) => data),
+      })),
+    })),
+    `WCAG violations at ${page.url()}`,
+  ).toEqual([]);
 }
 
 test("public entry points support keyboard, reduced motion and WCAG checks", async ({ page }) => {
   await page.goto("/");
   await expectNoAccessibilityViolations(page);
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("link", { name: "UNYON MINDANAO" })).toBeFocused();
+  await expect(page.getByRole("link", { name: "Skip to main content" })).toBeFocused();
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).scrollBehavior)).toBe("auto");
   await page.goto("/sign-in");

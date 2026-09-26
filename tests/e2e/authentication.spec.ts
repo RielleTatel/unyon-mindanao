@@ -21,7 +21,7 @@ test("a bootstrapped Super Admin signs in, reaches the protected portal, and sig
     }),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "SUPER ADMIN" })).toBeVisible();
-  await expect(page.getByText(localEmail)).toBeVisible();
+  await expect(page.getByRole("banner").getByText(localEmail)).toBeVisible();
 
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/sign-in$/u);

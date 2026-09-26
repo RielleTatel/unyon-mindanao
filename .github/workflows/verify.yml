@@ -70,4 +70,4 @@ jobs:
         run: >-
           pnpm exec firebase emulators:exec --only auth
           --project unyon-mindanao-local
-          "pnpm bootstrap:local && pnpm test:e2e && pnpm test:e2e:worker"
+          "pnpm bootstrap:local && pnpm test:e2e && pnpm bootstrap:local:d1 && pnpm test:e2e:worker"

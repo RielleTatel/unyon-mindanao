@@ -65,7 +65,7 @@
     "pretest:integration": "pnpm db:test:prepare",
     "test:integration": "vitest run --config vitest.integration.config.ts --passWithNoTests",
     "test:e2e": "playwright test",
-    "test:e2e:worker": "playwright test --config playwright.worker.config.ts",
+    "test:e2e:worker": "cross-env E2E_PERSISTENCE_PROVIDER=d1 playwright test --config playwright.worker.config.ts",
     "env:check": "node --import tsx scripts/validate-environment.ts",
     "env:check:local": "node --import tsx scripts/validate-environment.ts local",
     "env:check:preview": "node --import tsx scripts/validate-environment.ts preview",

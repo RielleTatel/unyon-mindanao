@@ -5,6 +5,11 @@ import { d1SqlString, executeLocalD1, queryLocalD1 } from "../fixtures/local-d1-
 config({ path: ".env.local", quiet: true });
 
 test("submits, edits, discloses and closes an Event Evaluation", async ({ page }) => {
+  test.skip(
+    process.env.E2E_PERSISTENCE_PROVIDER !== "d1",
+    "This journey seeds D1 directly and runs in the Worker E2E suite.",
+  );
+
   const eventId = randomUUID();
   const title = `Evaluation journey ${randomUUID().slice(0, 8)}`;
   const users = queryLocalD1<{ id: string }>(
