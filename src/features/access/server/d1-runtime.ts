@@ -1,6 +1,6 @@
 import "server-only";
 
-import { env } from "cloudflare:workers";
+import { getWorkerEnvironment } from "#unyon-worker-environment";
 import { createD1AccessPersistence } from "./d1-persistence";
 import type { D1BatchTransaction } from "./d1-transaction-runner";
 import { createSessionService } from "./session-service";
@@ -25,7 +25,7 @@ export async function withD1AccessRuntime<Capabilities extends object, Result>(
 ) {
   const projectId = process.env.FIREBASE_PROJECT_ID;
   if (!projectId) throw new Error("FIREBASE_PROJECT_ID is required");
-  const database = (env as unknown as WorkerBindings).PORTAL_DB;
+  const database = (getWorkerEnvironment() as unknown as WorkerBindings).PORTAL_DB;
   if (!database) throw new Error("The PORTAL_DB D1 binding is required");
 
   const persistence = createD1AccessPersistence(database, createCapabilities);

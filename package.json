@@ -11,6 +11,10 @@
     "#unyon-prisma-client": {
       "workerd": "./src/platform/database/generated/client.ts",
       "default": "./src/platform/database/generated-node/client.ts"
+    },
+    "#unyon-worker-environment": {
+      "workerd": "./src/platform/cloudflare/worker-environment.ts",
+      "default": "./src/platform/cloudflare/local-environment.ts"
     }
   },
   "packageManager": "pnpm@11.3.0",
