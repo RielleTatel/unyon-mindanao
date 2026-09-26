@@ -66,7 +66,7 @@ export default async function PortalPage() {
 
         <section aria-labelledby="upcoming-events" className="border-t border-primary/15 py-8 sm:py-10">
           <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-            <div><p className="m-0 text-xs font-extrabold tracking-[0.14em] text-[#8b6c2b] uppercase">Across the network</p><h2 className="mt-2 mb-0 font-serif text-3xl font-medium tracking-[-0.03em]" id="upcoming-events">Upcoming events</h2></div>
+            <div><p className="m-0 text-xs font-extrabold tracking-[0.14em] text-[#80601f] uppercase">Across the network</p><h2 className="mt-2 mb-0 font-serif text-3xl font-medium tracking-[-0.03em]" id="upcoming-events">Upcoming events</h2></div>
             <Link className="text-sm font-bold text-primary underline-offset-4 hover:underline" href="/portal/events">View calendar →</Link>
           </div>
           {upcomingEvents.length ? (
