@@ -55,12 +55,14 @@ test("University Admin publishes an event, a Representative views it, and turnov
 
     await page.goto("/portal/events");
     const title = `Mindanao Leadership Forum ${suffix.slice(0, 8)}`;
+    const startsAt = futureManilaTime(2, 10, 0);
+    const endsAt = futureManilaTime(2, 12, 0);
     const form = page.locator("form").filter({ has: page.getByRole("button", { name: "Save event draft" }) });
     await form.getByLabel("Event title").fill(title);
     await form.getByLabel("Category").fill("Leadership forum");
     await form.getByLabel("Description").fill("A working prototype journey across the Unyon Mindanao network.");
-    await form.getByLabel("Starts").fill(futureManilaTime(2, 10, 0));
-    await form.getByLabel("Ends").fill(futureManilaTime(2, 12, 0));
+    await form.getByLabel("Starts").fill(startsAt);
+    await form.getByLabel("Ends").fill(endsAt);
     await form.getByLabel("Physical venue").fill("Davao City");
     await form.getByRole("button", { name: "Save event draft" }).click();
 
@@ -88,7 +90,7 @@ test("University Admin publishes an event, a Representative views it, and turnov
     `);
 
     await acceptInvitation(page, request, representativeToken, representativeEmail, "Journey Representative", universityName, "Representative");
-    await page.goto("/portal/events?view=calendar");
+    await page.goto(`/portal/events?view=calendar&month=${startsAt.slice(0, 7)}`);
     await expect(page.getByRole("link", { name: title })).toBeVisible();
     await page.getByRole("link", { name: title }).click();
     await expect(page.getByRole("heading", { name: title })).toBeVisible();

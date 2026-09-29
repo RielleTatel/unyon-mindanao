@@ -50,7 +50,7 @@ describe("environment validation", () => {
     });
   });
 
-  it("allows preview without invitation email while keeping production strict", () => {
+  it("allows copy-link invitations in preview and production without Resend credentials", () => {
     const services = {
       DATABASE_URL: productionServices.DATABASE_URL,
       FIREBASE_PROJECT_ID: productionServices.FIREBASE_PROJECT_ID,
@@ -72,12 +72,15 @@ describe("environment validation", () => {
       appOrigin: "https://preview.unyon.example",
     });
 
-    expect(() =>
+    expect(
       validateEnvironment("production", {
         ...services,
         NEXT_PUBLIC_APP_ORIGIN: "https://portal.unyon.example",
       }),
-    ).toThrow("RESEND_API_KEY is required");
+    ).toEqual({
+      appEnvironment: "production",
+      appOrigin: "https://portal.unyon.example",
+    });
   });
 
   it("requires preview invitation email settings to be provided as a valid pair", () => {

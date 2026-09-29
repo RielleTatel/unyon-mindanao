@@ -62,3 +62,13 @@ export interface InvitationPreview {
   universityName: string;
   expiresAt: string;
 }
+
+export interface IssuedInvitationLinkDetails extends InvitationPreview {
+  url: string;
+}
+
+export interface InvitationActionState {
+  error: string | null;
+  message: string | null;
+  issued: IssuedInvitationLinkDetails | null;
+}

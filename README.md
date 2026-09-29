@@ -9,7 +9,7 @@ Private portal for Unyon ng mga Estudyante sa Mindanao and its Member Universiti
 - **Application shell:** branded responsive sign-in and protected portal shell. Standard Next.js and Vinext/Cloudflare Worker development and build paths are available.
 - **Access foundation:** Firebase verifies identity and email; the D1 runtime stores Portal Users, roles, Appointments, sessions, and current access. Secure sessions, typed protected operations, audit records, and local Super Admin bootstrap are implemented. The PostgreSQL runtime remains available during migration review.
 - **Member University directory — latest update:** Super Admins can create, edit, archive, restore, list, and inspect Member Universities. Database constraints enforce normalized name and slug rules. Mutations and redacted audit records are persisted together, and other roles are denied access to directory operations.
-- **University Admin invitations — latest verified update:** Super Admins can issue and revoke seven-day invitations. Acceptance verifies the Firebase email, consumes the one-time token, creates or links the Portal User, and creates an Appointment transactionally. The email adapter uses Resend.
+- **Private invitation links — latest verified update:** Super Admins can create copy-once University Admin links; University Admins can create scoped Representative links. Administrators share them through a private channel, and can revoke and reissue a lost link. Acceptance verifies the Firebase email, consumes the one-time token, creates or links the Portal User, and creates an Appointment transactionally. Resend delivery is deferred.
 - **Runtime coverage:** documented local verification includes module and PostgreSQL integration tests, desktop and mobile browser journeys, standard Next.js builds, Workers builds and local Wrangler/Workerd previews, and a deployment dry run. See [Runtime Proof](docs/unyon/RUNTIME_PROOF.md) for milestone details.
 
 The D1 feature update was verified locally on September 25, 2026. Wrangler applied all five D1 migrations in an isolated local database; 24 desktop/mobile browser journeys passed against local Workerd, D1, and Firebase Auth Emulator. The current unit suite passes 84 tests. The PostgreSQL export/import utility intentionally omits Portal Sessions; D1 backups preserve sessions and have passed row-count and content reconciliation in a separate local restore. Neither drill used production records.
@@ -77,7 +77,7 @@ NEXT_PUBLIC_APP_ORIGIN=https://portal.example.test pnpm env:check:production
 
 `pnpm deploy:check` validates the Cloudflare package without deploying it.
 
-University Admin invitation email delivery requires `RESEND_API_KEY` and a verified `INVITATION_FROM_EMAIL` sender. Production requires both values; preview may omit both, in which case invitation delivery remains unavailable. If configured, both values must be valid together. Local invitation sending also requires them; no invitation token is written to logs or the database.
+Invitation creation does not require `RESEND_API_KEY` or `INVITATION_FROM_EMAIL` in preview or production. After creating a link, copy it immediately and share it only with the intended recipient through a private channel; it cannot be retrieved later. Revoke and reissue a lost link. Firebase still sends its own email-verification message when the recipient creates an account, so configure the portal's HTTPS host as an authorized Firebase Auth domain and verify that message in the target environment. The verification link does not carry the private Invitation token; the recipient reopens the original Invitation after verifying. The raw token is stored only as a hash in the database and is not written to audit records or logs. Resend settings, if supplied for future work, must be provided together and do not enable automatic sending.
 
 ## Architecture
 
@@ -90,5 +90,6 @@ Firebase proves identity and verified email. In the current local target, D1 own
 - [Domain language](CONTEXT.md) — canonical roles, organizations, and workflows.
 - [Software requirements](docs/unyon/SRS.md) — MVP behavior and acceptance criteria.
 - [Implementation plan](docs/unyon/IMPLEMENTATION_PLAN.md) — architecture, phases, and delivery strategy.
+- [Private link Invitation spec](docs/unyon/LINK_BASED_INVITATIONS_SPEC.md) — copy-once sharing, acceptance, and rollout boundaries.
 - [Runtime proof](docs/unyon/RUNTIME_PROOF.md) — dated implementation and verification record.
 - [Architecture decisions](docs/adr/) — accepted decisions for identity, hosting, database access, and private storage.

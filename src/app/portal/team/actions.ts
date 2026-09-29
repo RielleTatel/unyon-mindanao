@@ -5,8 +5,9 @@ import { cookies } from "next/headers";
 
 import { AccessError, sessionCookieName } from "@/features/access/server";
 import { withUniversityAdminInvitationFeature, withRepresentativeAppointmentFeature } from "@/features/directory/server";
+import type { InvitationActionState } from "@/features/directory/contracts";
 
-export async function endRepresentativeAppointment(input: { id: string; idToken: string }): Promise<RepresentativeInvitationActionState> {
+export async function endRepresentativeAppointment(input: { id: string; idToken: string }): Promise<Pick<InvitationActionState, "error" | "message">> {
   const sessionToken = (await cookies()).get(sessionCookieName)?.value ?? "";
   try {
     await withRepresentativeAppointmentFeature((feature) => feature.end({ correlationId: crypto.randomUUID(), input, sessionToken }));
@@ -19,10 +20,7 @@ export async function endRepresentativeAppointment(input: { id: string; idToken:
   return { error: null, message: "Appointment ended. Historical attribution is preserved." };
 }
 
-export interface RepresentativeInvitationActionState {
-  error: string | null;
-  message: string | null;
-}
+export type RepresentativeInvitationActionState = InvitationActionState;
 
 export async function representativeInvitationAction(
   _previousState: RepresentativeInvitationActionState,
@@ -31,40 +29,52 @@ export async function representativeInvitationAction(
   const sessionToken = (await cookies()).get(sessionCookieName)?.value ?? "";
   const correlationId = crypto.randomUUID();
   const intent = text(formData, "intent");
+  let issued: InvitationActionState["issued"] = null;
 
   try {
-    await withUniversityAdminInvitationFeature(async (feature) => {
+    const result = await withUniversityAdminInvitationFeature(async (feature) => {
       if (intent === "invite") {
-        await feature.inviteRepresentative({
+        return feature.inviteRepresentative({
           correlationId,
           input: { email: text(formData, "email"), universityId: text(formData, "universityId") },
           sessionToken,
         });
-      } else if (intent === "revoke") {
+      }
+      if (intent === "revoke") {
         await feature.revokeRepresentative({
           correlationId,
           input: { id: text(formData, "id") },
           sessionToken,
         });
-      } else {
-        throw new AccessError("INVALID_INPUT", "Invalid invitation action");
+        return null;
       }
+      throw new AccessError("INVALID_INPUT", "Invalid invitation action");
     });
+    if (result) {
+      issued = {
+        url: result.invitationUrl,
+        email: result.invitation.email,
+        role: result.invitation.role,
+        universityName: result.invitation.universityName,
+        expiresAt: result.invitation.expiresAt,
+      };
+    }
   } catch (error) {
     if (error instanceof AccessError) {
-      if (error.code === "INVALID_INPUT") return { error: "Enter a valid email address.", message: null };
-      if (error.code === "CONFLICT") return { error: "This email already has a pending invitation or active Representative Appointment.", message: null };
-      if (error.code === "AUTHENTICATION_REQUIRED") return { error: "Your session has expired. Sign in again.", message: null };
-      if (error.code === "OPERATION_FAILED") return { error: "The invitation could not be delivered. Check email delivery settings and try again.", message: null };
-      if (error.code === "NOT_FOUND_OR_FORBIDDEN") return { error: "That invitation could not be changed.", message: null };
+      if (error.code === "INVALID_INPUT") return { error: "Enter a valid email address.", message: null, issued: null };
+      if (error.code === "CONFLICT") return { error: "This email already has a pending invitation or active Representative Appointment.", message: null, issued: null };
+      if (error.code === "AUTHENTICATION_REQUIRED") return { error: "Your session has expired. Sign in again.", message: null, issued: null };
+      if (error.code === "OPERATION_FAILED") return { error: "The invitation could not be created. Try again.", message: null, issued: null };
+      if (error.code === "NOT_FOUND_OR_FORBIDDEN") return { error: "That invitation could not be changed.", message: null, issued: null };
     }
-    return { error: "The invitation could not be changed. Try again.", message: null };
+    return { error: "The invitation could not be changed. Try again.", message: null, issued: null };
   }
 
   revalidatePath("/portal/team");
   return {
     error: null,
-    message: intent === "invite" ? "Invitation sent. It expires in seven days." : "Invitation revoked.",
+    message: intent === "invite" ? "Invitation created. Copy and share its link privately." : "Invitation revoked.",
+    issued,
   };
 }
 

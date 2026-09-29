@@ -4,12 +4,15 @@ import { useActionState } from "react";
 
 import { memberUniversityAction } from "@/app/portal/universities/actions";
 import { universityAdminInvitationAction } from "@/app/portal/universities/invitation-actions";
+import { IssuedInvitationLink } from "./issued-invitation-link";
 import type {
+  InvitationActionState,
   MemberUniversityRecord,
   UniversityAdminInvitationRecord,
 } from "../contracts";
 
 const initialState = { error: null, message: null };
+const invitationInitialState: InvitationActionState = { error: null, message: null, issued: null };
 const inputClassName =
   "mt-1 block min-h-11 w-full rounded-xl border border-primary/20 bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const buttonClassName =
@@ -260,7 +263,7 @@ function InvitationPanel({
 function InvitationForm({ universityId }: { universityId: string }) {
   const [state, formAction, isPending] = useActionState(
     universityAdminInvitationAction,
-    initialState,
+    invitationInitialState,
   );
 
   return (
@@ -280,10 +283,11 @@ function InvitationForm({ universityId }: { universityId: string }) {
         />
       </label>
       <button className={`${buttonClassName} self-end`} disabled={isPending} type="submit">
-        {isPending ? "Sending…" : "Invite Admin"}
+        {isPending ? "Creating…" : "Create invitation link"}
       </button>
       <div className="sm:col-span-2">
         <ActionFeedback error={state.error} message={state.message} />
+        {state.issued ? <IssuedInvitationLink issued={state.issued} key={state.issued.url} /> : null}
       </div>
     </form>
   );
@@ -292,7 +296,7 @@ function InvitationForm({ universityId }: { universityId: string }) {
 function RevokeInvitationForm({ invitationId }: { invitationId: string }) {
   const [state, formAction, isPending] = useActionState(
     universityAdminInvitationAction,
-    initialState,
+    invitationInitialState,
   );
 
   return (

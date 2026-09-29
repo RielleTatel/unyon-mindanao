@@ -43,12 +43,13 @@ describe("University Admin invitation persistence", () => {
   it("persists a hashed seven-day invitation and transactionally creates the Portal User and Appointment", async () => {
     const context = await createContext();
     const invitedEmail = `admin-${randomUUID()}@unyon.test`;
-    const invitation = await context.feature.invite(context.request({
+    const issued = await context.feature.invite(context.request({
       email: ` ${invitedEmail.toUpperCase()} `,
       universityId: context.university.id,
     }));
+    const invitation = issued.invitation;
     const stored = await prisma.invitation.findUniqueOrThrow({ where: { id: invitation.id } });
-    const rawToken = new URL(context.sentLinks[0]!).hash.slice(1);
+    const rawToken = new URL(issued.invitationUrl).hash.slice(1);
     const expectedHash = await webCryptoSessionTokens.hash(rawToken);
 
     expect(stored).toMatchObject({
@@ -131,11 +132,12 @@ describe("University Admin invitation persistence", () => {
   it("rejects a mismatched verified email, then rejects a revoked one-time token", async () => {
     const context = await createContext();
     const invitedEmail = `match-${randomUUID()}@unyon.test`;
-    const invitation = await context.feature.invite(context.request({
+    const issued = await context.feature.invite(context.request({
       email: invitedEmail,
       universityId: context.university.id,
     }));
-    const rawToken = new URL(context.sentLinks[0]!).hash.slice(1);
+    const invitation = issued.invitation;
+    const rawToken = new URL(issued.invitationUrl).hash.slice(1);
 
     context.setIdentity({
       authenticatedAt: new Date(),
@@ -165,11 +167,12 @@ describe("University Admin invitation persistence", () => {
 
   it("rejects expired and archived-university invitations", async () => {
     const expiredContext = await createContext();
-    const expired = await expiredContext.feature.invite(expiredContext.request({
+    const expiredIssued = await expiredContext.feature.invite(expiredContext.request({
       email: `expired-${randomUUID()}@unyon.test`,
       universityId: expiredContext.university.id,
     }));
-    const expiredToken = new URL(expiredContext.sentLinks[0]!).hash.slice(1);
+    const expired = expiredIssued.invitation;
+    const expiredToken = new URL(expiredIssued.invitationUrl).hash.slice(1);
     await prisma.invitation.update({
       data: { expiresAt: new Date(Date.now() - 1000) },
       where: { id: expired.id },
@@ -182,11 +185,12 @@ describe("University Admin invitation persistence", () => {
     })).rejects.toMatchObject({ code: "INVALID_INVITATION" });
 
     const archivedContext = await createContext();
-    const archived = await archivedContext.feature.invite(archivedContext.request({
+    const archivedIssued = await archivedContext.feature.invite(archivedContext.request({
       email: `archived-${randomUUID()}@unyon.test`,
       universityId: archivedContext.university.id,
     }));
-    const archivedToken = new URL(archivedContext.sentLinks[0]!).hash.slice(1);
+    const archived = archivedIssued.invitation;
+    const archivedToken = new URL(archivedIssued.invitationUrl).hash.slice(1);
     await prisma.memberUniversity.update({ data: { status: "ARCHIVED" }, where: { id: archivedContext.university.id } });
     await expect(archivedContext.feature.preview(archivedToken)).resolves.toBeNull();
     await expect(archivedContext.feature.accept({
@@ -212,16 +216,17 @@ describe("University Admin invitation persistence", () => {
       emailVerified: true,
       firebaseUid,
     });
-    const invitation = await context.feature.invite(context.request({
+    const issued = await context.feature.invite(context.request({
       email: invitedEmail,
       universityId: context.university.id,
     }));
+    const invitation = issued.invitation;
     await expect(context.feature.invite(context.request({
       email: invitedEmail,
       universityId: context.university.id,
     }))).rejects.toMatchObject({ code: "CONFLICT" });
 
-    const rawToken = new URL(context.sentLinks[0]!).hash.slice(1);
+    const rawToken = new URL(issued.invitationUrl).hash.slice(1);
     await expect(context.feature.accept({
       correlationId: "linked-account",
       fullName: "Ignored Replacement Name",
@@ -240,11 +245,11 @@ describe("University Admin invitation persistence", () => {
       const context = await createContext();
       const email = `concurrent-${randomUUID()}@unyon.test`;
       context.setIdentity({ authenticatedAt: new Date(), email, emailVerified: true, firebaseUid: randomUUID() });
-      await context.feature.invite(context.request({ email, universityId: context.university.id }));
-      pending.push(context);
+      const issued = await context.feature.invite(context.request({ email, universityId: context.university.id }));
+      pending.push({ context, rawToken: new URL(issued.invitationUrl).hash.slice(1) });
     }
-    const results = await Promise.allSettled(pending.map((context) => context.feature.accept({
-      correlationId: randomUUID(), fullName: "Concurrent Invitee", idToken: "verified-token", token: new URL(context.sentLinks[0]!).hash.slice(1),
+    const results = await Promise.allSettled(pending.map(({ context, rawToken }) => context.feature.accept({
+      correlationId: randomUUID(), fullName: "Concurrent Invitee", idToken: "verified-token", token: rawToken,
     })));
     expect(results.filter(({ status }) => status === "rejected")).toEqual([]);
   });
@@ -291,7 +296,6 @@ async function createContext() {
   const persistence = createAccessPersistence(prisma, (transaction) => ({
     universityAdminInvitations: new PrismaUniversityAdminInvitationRepository(transaction),
   }));
-  const sentLinks: string[] = [];
   const feature = createUniversityAdminInvitationFeature({
     sessions: { hashSessionToken: async () => sessionTokenHash },
     transactions: persistence.transactions,
@@ -301,11 +305,6 @@ async function createContext() {
     },
     identityVerifier,
     tokens: webCryptoSessionTokens,
-    delivery: {
-      send: async ({ invitationUrl }) => {
-        sentLinks.push(invitationUrl);
-      },
-    },
     appOrigin: "https://portal.unyon.example",
   });
   const superAdmin: PortalActor = {
@@ -322,7 +321,6 @@ async function createContext() {
     request(input: unknown) {
       return { correlationId: randomUUID(), input, sessionToken };
     },
-    sentLinks,
     setIdentity(value: typeof identity) {
       identity = value;
     },

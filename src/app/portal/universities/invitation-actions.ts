@@ -5,11 +5,7 @@ import { cookies } from "next/headers";
 
 import { AccessError, sessionCookieName } from "@/features/access/server";
 import { withUniversityAdminInvitationFeature } from "@/features/directory/server";
-
-export interface InvitationActionState {
-  error: string | null;
-  message: string | null;
-}
+import type { InvitationActionState } from "@/features/directory/contracts";
 
 export async function universityAdminInvitationAction(
   _previousState: InvitationActionState,
@@ -18,10 +14,11 @@ export async function universityAdminInvitationAction(
   const sessionToken = (await cookies()).get(sessionCookieName)?.value ?? "";
   const correlationId = crypto.randomUUID();
   const intent = formText(formData, "intent");
+  let issued: InvitationActionState["issued"] = null;
 
   try {
     if (intent === "invite") {
-      await withUniversityAdminInvitationFeature((feature) =>
+      const result = await withUniversityAdminInvitationFeature((feature) =>
         feature.invite({
           correlationId,
           input: {
@@ -31,6 +28,13 @@ export async function universityAdminInvitationAction(
           sessionToken,
         }),
       );
+      issued = {
+        url: result.invitationUrl,
+        email: result.invitation.email,
+        role: result.invitation.role,
+        universityName: result.invitation.universityName,
+        expiresAt: result.invitation.expiresAt,
+      };
     } else if (intent === "revoke") {
       await withUniversityAdminInvitationFeature((feature) =>
         feature.revoke({
@@ -40,41 +44,44 @@ export async function universityAdminInvitationAction(
         }),
       );
     } else {
-      return { error: "That request could not be completed.", message: null };
+      return { error: "That request could not be completed.", message: null, issued: null };
     }
   } catch (error) {
     if (error instanceof AccessError) {
       if (error.code === "INVALID_INPUT") {
-        return { error: "Enter a valid email address.", message: null };
+        return { error: "Enter a valid email address.", message: null, issued: null };
       }
       if (error.code === "CONFLICT") {
         return {
           error: "This email already has a pending invitation or appointment for that university.",
           message: null,
+          issued: null,
         };
       }
       if (error.code === "NOT_FOUND_OR_FORBIDDEN") {
-        return { error: "That invitation could not be changed.", message: null };
+        return { error: "That invitation could not be changed.", message: null, issued: null };
       }
       if (error.code === "AUTHENTICATION_REQUIRED") {
-        return { error: "Your session has expired. Sign in again.", message: null };
+        return { error: "Your session has expired. Sign in again.", message: null, issued: null };
       }
       if (error.code === "OPERATION_FAILED") {
         revalidatePath("/portal/universities");
         return {
-          error: "The invitation could not be delivered. Check email delivery settings and try again.",
+          error: "The invitation could not be created. Try again.",
           message: null,
+          issued: null,
         };
       }
     }
 
-    return { error: "The invitation could not be changed. Try again.", message: null };
+    return { error: "The invitation could not be changed. Try again.", message: null, issued: null };
   }
 
   revalidatePath("/portal/universities");
   return {
     error: null,
-    message: intent === "invite" ? "Invitation sent. It expires in seven days." : "Invitation revoked.",
+    message: intent === "invite" ? "Invitation created. Copy and share its link privately." : "Invitation revoked.",
+    issued,
   };
 }
 

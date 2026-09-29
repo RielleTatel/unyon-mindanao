@@ -10,7 +10,6 @@ import type {
   TransactionRunner,
 } from "@/features/access/server";
 import { AccessError, createProtectedOperationFactory } from "@/features/access/server";
-import type { InvitationDelivery } from "@/platform/email/contracts";
 import type { InvitationPreview, UniversityAdminInvitationRecord } from "../contracts";
 
 export type { InvitationPreview, UniversityAdminInvitationRecord } from "../contracts";
@@ -69,7 +68,6 @@ export function createUniversityAdminInvitationFeature(dependencies: {
   acceptance: InvitationAcceptanceRepository;
   identityVerifier: IdentityVerifier;
   tokens: SessionTokens;
-  delivery: InvitationDelivery;
   appOrigin: string;
 }) {
   const factory = createProtectedOperationFactory({
@@ -221,32 +219,15 @@ export function createUniversityAdminInvitationFeature(dependencies: {
     const rawToken = dependencies.tokens.create();
     const tokenHash = await dependencies.tokens.hash(rawToken);
     const invitationId = crypto.randomUUID();
+    const invitationUrl = new URL("/accept-invitation", dependencies.appOrigin);
+    invitationUrl.hash = rawToken;
     const operation = role === "REPRESENTATIVE" ? createRepresentative : createPending;
     const result = await operation({
       ...request,
       input: { ...parsed.data, invitationId, role, tokenHash },
     });
 
-    try {
-      const invitationUrl = new URL("/accept-invitation", dependencies.appOrigin);
-      invitationUrl.hash = rawToken;
-      await dependencies.delivery.send({
-        email: result.invitation.email,
-        universityName: result.universityName,
-        invitationUrl: invitationUrl.toString(),
-        ...(role === "REPRESENTATIVE" ? { role } : {}),
-      });
-    } catch {
-      try {
-        const revoke = role === "REPRESENTATIVE" ? revokeRepresentativePending : revokePending;
-        await revoke({ correlationId: request.correlationId, input: { id: result.invitation.id }, sessionToken: request.sessionToken });
-      } catch {
-        // Keep delivery errors generic; a successful compensation is recorded in the audit log.
-      }
-      throw new AccessError("OPERATION_FAILED", "The invitation could not be delivered");
-    }
-
-    return result.invitation;
+    return { invitation: result.invitation, invitationUrl: invitationUrl.toString() };
   }
 
   return {

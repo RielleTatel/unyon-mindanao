@@ -14,7 +14,6 @@ import {
 } from "./prisma-university-admin-invitation-repository";
 import { createFirebaseIdentityVerifier } from "@/platform/firebase/identity-verifier";
 import { webCryptoSessionTokens } from "@/platform/crypto/session-tokens";
-import { createResendInvitationDelivery } from "@/platform/email/resend-invitation-delivery";
 import { createUniversityAdminInvitationFeature, type UniversityAdminInvitationRepository } from "./university-admin-invitations";
 import { D1UniversityAdminInvitationRepository } from "./d1-university-admin-invitation-repository";
 
@@ -34,10 +33,6 @@ export async function withUniversityAdminInvitationFeature<Result>(
           return work(createUniversityAdminInvitationFeature({
             acceptance: new D1UniversityAdminInvitationRepository(database),
             appOrigin: process.env.NEXT_PUBLIC_APP_ORIGIN ?? "http://localhost:3000",
-            delivery: createResendInvitationDelivery({
-              apiKey: process.env.RESEND_API_KEY,
-              from: process.env.INVITATION_FROM_EMAIL,
-            }),
             identityVerifier,
             sessions,
             tokens: webCryptoSessionTokens,
@@ -82,10 +77,6 @@ export async function withUniversityAdminInvitationFeature<Result>(
     },
     appOrigin:
       process.env.NEXT_PUBLIC_APP_ORIGIN ?? "http://localhost:3000",
-    delivery: createResendInvitationDelivery({
-      apiKey: process.env.RESEND_API_KEY,
-      from: process.env.INVITATION_FROM_EMAIL,
-    }),
     identityVerifier,
     sessions,
     tokens: webCryptoSessionTokens,

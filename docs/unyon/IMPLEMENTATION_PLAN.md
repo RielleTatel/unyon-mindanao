@@ -65,7 +65,7 @@ src/
 │   ├── firebase/                # Production Firebase adapter
 │   ├── database/                # D1 bindings, SQL helpers, and migrations
 │   ├── r2/                      # Production object-store adapter
-│   ├── email/                   # Invitation delivery adapter
+│   ├── email/                   # Dormant Invitation email adapter for a later migration
 │   └── observability/           # Structured logging and correlation IDs
 └── shared/
     ├── ui/                      # shadcn/ui primitives and branded composition
@@ -179,8 +179,8 @@ Add SQLite constraints, indexes, and triggers for valid owner combinations, non-
 ### Invitation
 
 1. Authorized administrator creates an Invitation.
-2. Email delivery sends the one-time link; the raw token is never stored.
-3. Recipient creates and verifies a Firebase email/password account.
+2. The portal reveals the one-time link only to the authorized administrator, who copies and shares it privately; the raw token is never stored.
+3. Recipient creates and verifies a Firebase email/password account, or signs in with an existing verified account. Firebase's verification return URL omits the Invitation token; the recipient reopens the original private link after verification.
 4. Acceptance matches normalized verified email, validates expiry, creates the Portal User if needed, and creates the Appointment transactionally.
 5. Firebase accounts without an active Appointment remain unable to enter the portal.
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, useSyncExternalStore, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -12,11 +12,18 @@ import type { InvitationPreview } from "../contracts";
 
 type Mode = "create" | "sign-in";
 
+function subscribeToInvitationHash(onChange: () => void) {
+  window.addEventListener("hashchange", onChange);
+  return () => window.removeEventListener("hashchange", onChange);
+}
+
+function invitationHash() {
+  return window.location.hash.slice(1);
+}
+
 export function InvitationAcceptance() {
   const router = useRouter();
-  const [token] = useState(() =>
-    typeof window === "undefined" ? "" : window.location.hash.slice(1),
-  );
+  const token = useSyncExternalStore(subscribeToInvitationHash, invitationHash, () => "");
   const [preview, setPreview] = useState<InvitationPreview | null>(null);
   const [mode, setMode] = useState<Mode>("create");
   const [error, setError] = useState("");
@@ -25,17 +32,24 @@ export function InvitationAcceptance() {
 
   useEffect(() => {
     if (!token) {
-      void Promise.resolve().then(() =>
-        setError("This invitation link is invalid or expired."),
-      );
+      void Promise.resolve().then(() => {
+        setPreview(null);
+        setError("No invitation token is present. If you just verified your email, reopen the original private invitation link to finish.");
+      });
       return;
     }
 
+    const controller = new AbortController();
+    void Promise.resolve().then(() => {
+      setPreview(null);
+      setError("");
+    });
     void fetch("/api/invitations/preview", {
       body: JSON.stringify({ token }),
       cache: "no-store",
       headers: { "content-type": "application/json" },
       method: "POST",
+      signal: controller.signal,
     })
       .then(async (response) => {
         if (!response.ok) {
@@ -45,7 +59,12 @@ export function InvitationAcceptance() {
         return (await response.json()) as InvitationPreview;
       })
       .then(setPreview)
-      .catch(() => setError("This invitation link is invalid or expired."));
+      .catch((cause: unknown) => {
+        if (cause instanceof Error && cause.name === "AbortError") return;
+        setError("This invitation link is invalid or expired.");
+      });
+
+    return () => controller.abort();
   }, [token]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -57,7 +76,9 @@ export function InvitationAcceptance() {
     const data = new FormData(event.currentTarget);
     const fullName = String(data.get("fullName") ?? "").trim();
     const password = String(data.get("password") ?? "");
-    const continueUrl = window.location.href;
+    // Firebase verification links may expose their continue URL. Keep the
+    // private invitation token out of the email and verification flow.
+    const continueUrl = new URL("/accept-invitation", window.location.origin).toString();
 
     try {
       if (!preview || !token) {
@@ -66,7 +87,7 @@ export function InvitationAcceptance() {
 
       if (mode === "create") {
         await createPortalIdentityForInvitation(preview.email, password, continueUrl);
-        setMessage("Check your email and verify your address. Return to this page, then sign in to finish accepting your invitation.");
+        setMessage("Check your email and verify your address. Then reopen the original private invitation link and sign in to accept it.");
         setMode("sign-in");
         setSubmitting(false);
         return;
@@ -75,7 +96,7 @@ export function InvitationAcceptance() {
       const identity = await signInForInvitation(preview.email, password, continueUrl);
 
       if (!identity.emailVerified) {
-        setMessage("Your email is not verified yet. We sent another verification link.");
+        setMessage("Your email is not verified yet. We sent another verification link. After verifying, reopen the original private invitation link to finish.");
         setSubmitting(false);
         return;
       }

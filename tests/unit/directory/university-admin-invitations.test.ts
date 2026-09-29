@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  AccessError,
   type AuditRecord,
   type PortalActor,
   type TransactionRunner,
@@ -22,7 +21,7 @@ const superAdmin: PortalActor = {
   portalUserId: "00000000-0000-4000-8000-000000000001",
 };
 
-function createFeature(options: { role?: "SUPER_ADMIN" | "UNIVERSITY_ADMIN" | "REPRESENTATIVE"; deliveryFailure?: boolean } = {}) {
+function createFeature(options: { role?: "SUPER_ADMIN" | "UNIVERSITY_ADMIN" | "REPRESENTATIVE" } = {}) {
   const records = new Map<string, UniversityAdminInvitationRecord>();
   const audits: AuditRecord[] = [];
   const repository: UniversityAdminInvitationRepository = {
@@ -81,13 +80,6 @@ function createFeature(options: { role?: "SUPER_ADMIN" | "UNIVERSITY_ADMIN" | "R
             : superAdmin,
       ),
   };
-  const delivery = {
-    send: options.deliveryFailure
-      ? vi.fn(async () => {
-          throw new Error("provider error");
-        })
-      : vi.fn(async () => undefined),
-  };
   const tokens = {
     create: () => "x".repeat(43),
     hash: async () => "a".repeat(64),
@@ -105,11 +97,10 @@ function createFeature(options: { role?: "SUPER_ADMIN" | "UNIVERSITY_ADMIN" | "R
       }),
     },
     tokens,
-    delivery,
     appOrigin: "https://portal.unyon.example",
   });
 
-  return { acceptance, audits, delivery, feature, records, repository };
+  return { acceptance, audits, feature, records, repository };
 }
 
 const request = (input: unknown) => ({
@@ -126,56 +117,55 @@ describe("University Admin invitation feature", () => {
     expect(repository.listPending).toHaveBeenCalledWith(occurredAt, "REPRESENTATIVE", undefined);
     await feature.managedUniversities(request({}));
     expect(repository.listActiveUniversities).toHaveBeenCalled();
-    await expect(feature.revokeRepresentative(request({ id: invitation.id }))).resolves.toMatchObject({ status: "REVOKED" });
+    await expect(feature.revokeRepresentative(request({ id: invitation.invitation.id }))).resolves.toMatchObject({ status: "REVOKED" });
   });
-  it("normalizes email, sends a seven-day one-time link, and audits without the token", async () => {
-    const { audits, delivery, feature, records } = createFeature();
+  it("returns a private seven-day link to the authorized inviter without persisting the token", async () => {
+    const { audits, feature, records, repository } = createFeature();
     const result = await feature.invite(
       request({ email: "  Admin@University.EDU ", universityId }),
     );
 
     expect(result).toMatchObject({
-      email: "admin@university.edu",
-      role: "UNIVERSITY_ADMIN",
-      status: "PENDING",
-      universityName: "University of Mindanao",
-    });
-    expect(Date.parse(result.expiresAt) - Date.parse(result.createdAt)).toBe(7 * 24 * 60 * 60 * 1000);
-    expect(delivery.send).toHaveBeenCalledWith({
-      email: "admin@university.edu",
-      universityName: "University of Mindanao",
+      invitation: {
+        email: "admin@university.edu",
+        role: "UNIVERSITY_ADMIN",
+        status: "PENDING",
+        universityName: "University of Mindanao",
+      },
       invitationUrl: `https://portal.unyon.example/accept-invitation#${"x".repeat(43)}`,
     });
+    expect(Date.parse(result.invitation.expiresAt) - Date.parse(result.invitation.createdAt)).toBe(7 * 24 * 60 * 60 * 1000);
     expect([...records.values()]).toHaveLength(1);
     expect(audits).toEqual([
       expect.objectContaining({
         action: "university_admin_invitation.created",
-        resourceId: result.id,
+        resourceId: result.invitation.id,
         resourceType: "Invitation",
         metadata: { role: "UNIVERSITY_ADMIN", universityId },
       }),
     ]);
     expect(JSON.stringify(audits)).not.toContain("x".repeat(43));
-    expect(JSON.stringify(records)).not.toContain("x".repeat(43));
+    expect(repository.createPending).toHaveBeenCalledWith(expect.objectContaining({ tokenHash: "a".repeat(64) }));
+    expect(JSON.stringify([...records.values()])).not.toContain("x".repeat(43));
+    expect(JSON.stringify(await feature.listPending(request({})))).not.toContain("x".repeat(43));
   });
 
-  it("denies non-Super Admins and does not create or deliver invitations", async () => {
-    const { delivery, feature, repository } = createFeature({ role: "REPRESENTATIVE" });
+  it("denies non-Super Admins without creating an invitation", async () => {
+    const { feature, repository } = createFeature({ role: "REPRESENTATIVE" });
 
     await expect(
       feature.invite(request({ email: "admin@university.edu", universityId })),
     ).rejects.toMatchObject({ code: "NOT_FOUND_OR_FORBIDDEN" });
     expect(repository.createPending).not.toHaveBeenCalled();
-    expect(delivery.send).not.toHaveBeenCalled();
   });
 
   it("lets a University Admin invite a Representative only for its Member University", async () => {
-    const { audits, delivery, feature, repository } = createFeature({ role: "UNIVERSITY_ADMIN" });
-    const invitation = await feature.inviteRepresentative(request({ email: " rep@university.edu ", universityId }));
+    const { audits, feature, repository } = createFeature({ role: "UNIVERSITY_ADMIN" });
+    const issued = await feature.inviteRepresentative(request({ email: " rep@university.edu ", universityId }));
 
-    expect(invitation).toMatchObject({ email: "rep@university.edu", role: "REPRESENTATIVE", status: "PENDING" });
+    expect(issued.invitation).toMatchObject({ email: "rep@university.edu", role: "REPRESENTATIVE", status: "PENDING" });
+    expect(issued.invitationUrl).toBe(`https://portal.unyon.example/accept-invitation#${"x".repeat(43)}`);
     expect(repository.createPending).toHaveBeenCalledWith(expect.objectContaining({ role: "REPRESENTATIVE", universityId }));
-    expect(delivery.send).toHaveBeenCalledWith(expect.objectContaining({ role: "REPRESENTATIVE" }));
     expect(audits[0]).toMatchObject({
       action: "representative_invitation.created",
       metadata: { role: "REPRESENTATIVE", universityId },
@@ -186,19 +176,14 @@ describe("University Admin invitation feature", () => {
       .rejects.toMatchObject({ code: "NOT_FOUND_OR_FORBIDDEN" });
   });
 
-  it("revokes the pending invitation if delivery fails", async () => {
-    const { audits, feature, records } = createFeature({ deliveryFailure: true });
+  it("issues a usable link without configuring an email provider", async () => {
+    const { audits, feature, records } = createFeature();
 
-    await expect(
-      feature.invite(request({ email: "admin@university.edu", universityId })),
-    ).rejects.toEqual(
-      new AccessError("OPERATION_FAILED", "The invitation could not be delivered"),
-    );
-    expect([...records.values()]).toMatchObject([{ status: "REVOKED" }]);
-    expect(audits.map(({ action }) => action)).toEqual([
-      "university_admin_invitation.created",
-      "university_admin_invitation.revoked",
-    ]);
+    const result = await feature.invite(request({ email: "admin@university.edu", universityId }));
+
+    expect(result.invitationUrl).toBe(`https://portal.unyon.example/accept-invitation#${"x".repeat(43)}`);
+    expect([...records.values()]).toMatchObject([{ status: "PENDING" }]);
+    expect(audits.map(({ action }) => action)).toEqual(["university_admin_invitation.created"]);
   });
 
   it("checks verified Firebase identity before accepting a bearer invitation", async () => {
@@ -244,7 +229,6 @@ describe("University Admin invitation feature", () => {
         }),
       },
       tokens: { create: () => "x".repeat(43), hash: async () => "a".repeat(64) },
-      delivery: { send: async () => undefined },
       appOrigin: "https://portal.unyon.example",
     });
 

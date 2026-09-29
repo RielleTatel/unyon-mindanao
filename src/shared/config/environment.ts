@@ -60,7 +60,7 @@ export function validateEnvironment(
   }
 
   if (environment !== "local") {
-    validateServiceConfiguration(source, environment, persistenceProvider);
+    validateServiceConfiguration(source, persistenceProvider);
   }
 
   if (source.APP_ENV && source.APP_ENV !== environment) {
@@ -77,7 +77,6 @@ export function validateEnvironment(
 
 function validateServiceConfiguration(
   source: Readonly<Record<string, string | undefined>>,
-  environment: AppEnvironment,
   persistenceProvider: string,
 ) {
   if (persistenceProvider !== "postgres" && persistenceProvider !== "d1") {
@@ -104,16 +103,6 @@ function validateServiceConfiguration(
 
   const hasInvitationApiKey = Boolean(source.RESEND_API_KEY?.trim());
   const hasInvitationSender = Boolean(source.INVITATION_FROM_EMAIL?.trim());
-  const invitationEmailRequired = environment === "production";
-
-  if (
-    invitationEmailRequired &&
-    (!hasInvitationApiKey || !hasInvitationSender)
-  ) {
-    throw new EnvironmentConfigurationError(
-      `${!hasInvitationApiKey ? "RESEND_API_KEY" : "INVITATION_FROM_EMAIL"} is required`,
-    );
-  }
 
   if (hasInvitationApiKey !== hasInvitationSender) {
     throw new EnvironmentConfigurationError(

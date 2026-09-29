@@ -3,10 +3,10 @@
 import { useActionState } from "react";
 
 import { representativeInvitationAction } from "@/app/portal/team/actions";
-import type { InvitationActionState } from "@/app/portal/universities/invitation-actions";
-import type { MemberUniversityRecord, UniversityAdminInvitationRecord } from "../contracts";
+import type { InvitationActionState, MemberUniversityRecord, UniversityAdminInvitationRecord } from "../contracts";
+import { IssuedInvitationLink } from "./issued-invitation-link";
 
-const initialState: InvitationActionState = { error: null, message: null };
+const initialState: InvitationActionState = { error: null, message: null, issued: null };
 const inputClass = "mt-1 block min-h-11 w-full rounded-xl border border-primary/20 bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const buttonClass = "inline-flex min-h-10 items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-60";
 
@@ -49,10 +49,11 @@ function UniversityTeamCard({
         <input name="intent" type="hidden" value="invite" />
         <input name="universityId" type="hidden" value={university.id} />
         <label className="block text-sm font-semibold">Representative email<input autoComplete="email" className={inputClass} maxLength={320} name="email" placeholder="officer@university.edu" required type="email" /></label>
-        <button className={`${buttonClass} self-end`} disabled={isPending} type="submit">{isPending ? "Sending…" : "Invite Representative"}</button>
+        <button className={`${buttonClass} self-end`} disabled={isPending} type="submit">{isPending ? "Creating…" : "Create invitation link"}</button>
         <div className="sm:col-span-2">
           {state.error ? <p className="m-0 text-sm font-semibold text-destructive" role="alert">{state.error}</p> : null}
           {state.message ? <p className="m-0 text-sm font-semibold text-primary" role="status">{state.message}</p> : null}
+          {state.issued ? <IssuedInvitationLink issued={state.issued} key={state.issued.url} /> : null}
         </div>
       </form>
       <div className="pt-5">
