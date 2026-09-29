@@ -3,34 +3,35 @@
 import { useId, useRef, useState } from "react";
 
 import type { IssuedInvitationLinkDetails } from "../contracts";
+import { invitationCopy } from "../invitation-copy";
 
 export function IssuedInvitationLink({ issued }: { issued: IssuedInvitationLinkDetails }) {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [copyStatus, setCopyStatus] = useState("");
-  const roleName = issued.role === "UNIVERSITY_ADMIN" ? "University Admin" : "Representative";
+  const roleName = issued.role === "UNIVERSITY_ADMIN" ? invitationCopy.universityAdmin : invitationCopy.representative;
 
   async function copyLink() {
     try {
       await navigator.clipboard.writeText(issued.url);
-      setCopyStatus("Invitation link copied. Share it privately with the invited person.");
+      setCopyStatus(invitationCopy.copied);
     } catch {
       inputRef.current?.focus();
       inputRef.current?.select();
-      setCopyStatus("Automatic copying is unavailable. Select and copy the link above.");
+      setCopyStatus(invitationCopy.copyUnavailable);
     }
   }
 
   return (
-    <section aria-label="New invitation link" className="rounded-xl border border-primary/30 bg-primary/5 p-4 sm:col-span-2">
-      <p className="m-0 text-sm font-bold text-primary">Invitation created. Copy this link now; it will not be shown again.</p>
+    <section aria-label={invitationCopy.linkRegion} className="rounded-xl border border-primary/30 bg-primary/5 p-4 sm:col-span-2">
+      <p className="m-0 text-sm font-bold text-primary">{invitationCopy.linkCreated}</p>
       <p className="mt-2 mb-0 break-all text-sm text-foreground">
         {roleName} · {issued.universityName} · {issued.email}
       </p>
       <p className="mt-1 mb-0 text-xs text-muted-foreground">
-        Expires {new Date(issued.expiresAt).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Manila" })}
+        {invitationCopy.expires} {new Date(issued.expiresAt).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Manila" })}
       </p>
-      <label className="mt-4 block text-sm font-semibold" htmlFor={inputId}>Invitation link</label>
+      <label className="mt-4 block text-sm font-semibold" htmlFor={inputId}>{invitationCopy.linkLabel}</label>
       <div className="mt-1 flex flex-wrap gap-2">
         <input
           className="min-h-11 min-w-0 flex-1 rounded-xl border border-primary/20 bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -47,10 +48,10 @@ export function IssuedInvitationLink({ issued }: { issued: IssuedInvitationLinkD
           onClick={() => void copyLink()}
           type="button"
         >
-          Copy link
+          {invitationCopy.copyButton}
         </button>
       </div>
-      <p className="mt-2 mb-0 text-xs text-muted-foreground">Share through a private channel. If this link is lost, revoke the pending Invitation and create a new one.</p>
+      <p className="mt-2 mb-0 text-xs text-muted-foreground">{invitationCopy.linkShareHint}</p>
       <p aria-live="polite" className="mt-2 mb-0 text-sm font-semibold text-primary" role="status">{copyStatus}</p>
     </section>
   );

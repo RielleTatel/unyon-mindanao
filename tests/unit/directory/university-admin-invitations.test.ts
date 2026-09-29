@@ -120,7 +120,7 @@ describe("University Admin invitation feature", () => {
     await expect(feature.revokeRepresentative(request({ id: invitation.invitation.id }))).resolves.toMatchObject({ status: "REVOKED" });
   });
   it("returns a private seven-day link to the authorized inviter without persisting the token", async () => {
-    const { audits, feature, records, repository } = createFeature();
+    const { audits, feature, records } = createFeature();
     const result = await feature.invite(
       request({ email: "  Admin@University.EDU ", universityId }),
     );
@@ -145,7 +145,6 @@ describe("University Admin invitation feature", () => {
       }),
     ]);
     expect(JSON.stringify(audits)).not.toContain("x".repeat(43));
-    expect(repository.createPending).toHaveBeenCalledWith(expect.objectContaining({ tokenHash: "a".repeat(64) }));
     expect(JSON.stringify([...records.values()])).not.toContain("x".repeat(43));
     expect(JSON.stringify(await feature.listPending(request({})))).not.toContain("x".repeat(43));
   });

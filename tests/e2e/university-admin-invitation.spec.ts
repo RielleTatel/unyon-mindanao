@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 
 import { config } from "dotenv";
-import { expect, test } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 import { d1SqlString, executeLocalD1, queryLocalD1 } from "../fixtures/local-d1-cli";
 
 config({ path: ".env.local" });
@@ -30,19 +30,8 @@ test("a verified invited admin accepts a one-time invitation and enters its scop
   await page.getByRole("button", { name: "Create account and verify email" }).click();
   await expect(page.getByRole("status")).toContainText("Check your email");
 
-  const codesResponse = await request.get(
-    "http://127.0.0.1:9099/emulator/v1/projects/unyon-mindanao-local/oobCodes",
-  );
-  const codes = (await codesResponse.json()) as {
-    oobCodes: Array<{ email: string; oobLink: string; requestType: string }>;
-  };
-  const verification = codes.oobCodes
-    .toReversed()
-    .find((code) => code.email === email && code.requestType === "VERIFY_EMAIL");
-
-  expect(verification).toBeDefined();
-  expect(verification!.oobLink).not.toContain(token);
-  expect((await request.get(verification!.oobLink)).ok()).toBe(true);
+  const verificationLink = await verifyEmail(request, email);
+  expect(verificationLink).not.toContain(token);
 
   await page.goto("/accept-invitation");
   await page.reload();
@@ -72,6 +61,14 @@ test("a verified invited admin accepts a one-time invitation and enters its scop
   await expect(issuedRepresentative).toContainText("Representative");
   const representativeUrl = await issuedRepresentative.getByLabel("Invitation link").inputValue();
   expect(representativeUrl).toContain("/accept-invitation#");
+  await verifyCopyAndFallback(page, issuedRepresentative, representativeUrl);
+  await teamCard.getByRole("button", { name: "Revoke" }).click();
+  await expect(teamCard.getByRole("region", { name: "New invitation link" })).toHaveCount(0);
+  await teamCard.getByLabel("Representative email").fill(representativeEmail);
+  await teamCard.getByRole("button", { name: "Create invitation link" }).click();
+  const replacementRepresentativeUrl = await teamCard.getByRole("region", { name: "New invitation link" })
+    .getByLabel("Invitation link").inputValue();
+  expect(replacementRepresentativeUrl).not.toBe(representativeUrl);
   await page.reload();
   await expect(page.getByRole("region", { name: "New invitation link" })).toHaveCount(0);
   await expect(page.getByText(representativeEmail)).toBeVisible();
@@ -99,17 +96,7 @@ test("an existing verified Firebase account signs in to accept a private invitat
     { data: { idToken, requestType: "VERIFY_EMAIL" } },
   );
   expect(verificationRequest.ok()).toBe(true);
-  const codesResponse = await request.get(
-    "http://127.0.0.1:9099/emulator/v1/projects/unyon-mindanao-local/oobCodes",
-  );
-  const codes = (await codesResponse.json()) as {
-    oobCodes: Array<{ email: string; oobLink: string; requestType: string }>;
-  };
-  const verification = codes.oobCodes
-    .toReversed()
-    .find((code) => code.email === email && code.requestType === "VERIFY_EMAIL");
-  expect(verification).toBeDefined();
-  expect((await request.get(verification!.oobLink)).ok()).toBe(true);
+  await verifyEmail(request, email);
 
   const { token, universityName } = seedUniversityAdminInvitation(email);
   await page.goto(`/accept-invitation#${token}`);
@@ -159,45 +146,36 @@ test("a Super Admin creates a copy-once University Admin link and can revoke it"
   await expect(issued).toContainText("University Admin");
   const invitationUrl = await issued.getByLabel("Invitation link").inputValue();
   expect(invitationUrl).toContain("/accept-invitation#");
-  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
-  await issued.getByRole("button", { name: "Copy link" }).click();
-  await expect(issued.getByRole("status")).toContainText("copied");
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(invitationUrl);
+  await verifyCopyAndFallback(page, issued, invitationUrl);
 
-  await page.evaluate(() => {
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: { writeText: async () => { throw new Error("Clipboard denied"); } },
-    });
-  });
-  await issued.getByRole("button", { name: "Copy link" }).click();
-  await expect(issued.getByRole("status")).toContainText("Select and copy the link above");
-  const selectedLink = await issued.getByLabel("Invitation link").evaluate((element) => {
-    const input = element as HTMLInputElement;
-    return input.value.slice(input.selectionStart ?? 0, input.selectionEnd ?? 0);
-  });
-  expect(selectedLink).toBe(invitationUrl);
+  await card.getByRole("button", { name: "Revoke" }).click();
+  await expect(card.getByRole("region", { name: "New invitation link" })).toHaveCount(0);
+  await expect(card.getByText(invitedEmail)).toHaveCount(0);
 
+  const revokedPreview = await page.request.post("/api/invitations/preview", {
+    data: { token: new URL(invitationUrl).hash.slice(1) },
+  });
+  expect(revokedPreview.ok()).toBe(false);
+  const revokedPage = await page.context().newPage();
+  try {
+    await revokedPage.goto(invitationUrl);
+    await expect(revokedPage.getByRole("alert")).toContainText("revoked, or already used");
+  } finally {
+    await revokedPage.close();
+  }
+
+  await card.getByLabel("Email address").fill(invitedEmail);
+  await card.getByRole("button", { name: "Create invitation link" }).click();
+  const replacementUrl = await card.getByRole("region", { name: "New invitation link" })
+    .getByLabel("Invitation link").inputValue();
+  expect(replacementUrl).not.toBe(invitationUrl);
   await page.reload();
   await expect(page.getByRole("region", { name: "New invitation link" })).toHaveCount(0);
   const refreshedCard = page.locator("article").filter({
     has: page.getByRole("heading", { name: universityName, exact: true }),
   });
   await expect(refreshedCard.getByText(invitedEmail)).toBeVisible();
-  await expect(refreshedCard).not.toContainText(invitationUrl);
-  await refreshedCard.getByRole("button", { name: "Revoke" }).click();
-  await expect(refreshedCard.getByText(invitedEmail)).toHaveCount(0);
-
-  const revokedPreview = await page.request.post("/api/invitations/preview", {
-    data: { token: new URL(invitationUrl).hash.slice(1) },
-  });
-  expect(revokedPreview.ok()).toBe(false);
-
-  await refreshedCard.getByLabel("Email address").fill(invitedEmail);
-  await refreshedCard.getByRole("button", { name: "Create invitation link" }).click();
-  const replacementUrl = await refreshedCard.getByRole("region", { name: "New invitation link" })
-    .getByLabel("Invitation link").inputValue();
-  expect(replacementUrl).not.toBe(invitationUrl);
+  await expect(refreshedCard).not.toContainText(replacementUrl);
 });
 
 function seedUniversityAdminInvitation(email: string) {
@@ -229,6 +207,42 @@ function seedUniversityAdminInvitation(email: string) {
   `);
 
   return { token, universityName };
+}
+
+async function verifyEmail(request: APIRequestContext, email: string) {
+  const codesResponse = await request.get(
+    "http://127.0.0.1:9099/emulator/v1/projects/unyon-mindanao-local/oobCodes",
+  );
+  const codes = (await codesResponse.json()) as {
+    oobCodes: Array<{ email: string; oobLink: string; requestType: string }>;
+  };
+  const verification = codes.oobCodes
+    .toReversed()
+    .find((code) => code.email === email && code.requestType === "VERIFY_EMAIL");
+  expect(verification).toBeDefined();
+  expect((await request.get(verification!.oobLink)).ok()).toBe(true);
+  return verification!.oobLink;
+}
+
+async function verifyCopyAndFallback(page: Page, issued: Locator, url: string) {
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await issued.getByRole("button", { name: "Copy link" }).click();
+  await expect(issued.getByRole("status")).toContainText("copied");
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(url);
+
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async () => { throw new Error("Clipboard denied"); } },
+    });
+  });
+  await issued.getByRole("button", { name: "Copy link" }).click();
+  await expect(issued.getByRole("status")).toContainText("Select and copy the link above");
+  const selectedLink = await issued.getByLabel("Invitation link").evaluate((element) => {
+    const input = element as HTMLInputElement;
+    return input.value.slice(input.selectionStart ?? 0, input.selectionEnd ?? 0);
+  });
+  expect(selectedLink).toBe(url);
 }
 
 function randomToken() {

@@ -9,6 +9,7 @@ import {
   signInForInvitation,
 } from "@/features/access/client/firebase-auth";
 import type { InvitationPreview } from "../contracts";
+import { invitationCopy } from "../invitation-copy";
 
 type Mode = "create" | "sign-in";
 
@@ -34,7 +35,7 @@ export function InvitationAcceptance() {
     if (!token) {
       void Promise.resolve().then(() => {
         setPreview(null);
-        setError("No invitation token is present. If you just verified your email, reopen the original private invitation link to finish.");
+        setError(invitationCopy.missingToken);
       });
       return;
     }
@@ -61,7 +62,7 @@ export function InvitationAcceptance() {
       .then(setPreview)
       .catch((cause: unknown) => {
         if (cause instanceof Error && cause.name === "AbortError") return;
-        setError("This invitation link is invalid or expired.");
+        setError(invitationCopy.unavailable);
       });
 
     return () => controller.abort();
@@ -87,7 +88,7 @@ export function InvitationAcceptance() {
 
       if (mode === "create") {
         await createPortalIdentityForInvitation(preview.email, password, continueUrl);
-        setMessage("Check your email and verify your address. Then reopen the original private invitation link and sign in to accept it.");
+        setMessage(invitationCopy.verifyCreated);
         setMode("sign-in");
         setSubmitting(false);
         return;
@@ -96,7 +97,7 @@ export function InvitationAcceptance() {
       const identity = await signInForInvitation(preview.email, password, continueUrl);
 
       if (!identity.emailVerified) {
-        setMessage("Your email is not verified yet. We sent another verification link. After verifying, reopen the original private invitation link to finish.");
+        setMessage(invitationCopy.verifyExisting);
         setSubmitting(false);
         return;
       }
@@ -129,7 +130,7 @@ export function InvitationAcceptance() {
         }
 
         if (result.error === "INVALID_INVITATION") {
-          throw new Error("This invitation link is invalid, expired, revoked, or already used.");
+          throw new Error(invitationCopy.unavailable);
         }
 
         if (result.error === "CONFLICT") {

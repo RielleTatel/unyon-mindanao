@@ -6,6 +6,8 @@ import { cookies } from "next/headers";
 import { AccessError, sessionCookieName } from "@/features/access/server";
 import { withUniversityAdminInvitationFeature, withRepresentativeAppointmentFeature } from "@/features/directory/server";
 import type { InvitationActionState } from "@/features/directory/contracts";
+import { invitationCopy } from "@/features/directory/invitation-copy";
+import { issuedInvitationDetails } from "@/features/directory/issued-invitation";
 
 export async function endRepresentativeAppointment(input: { id: string; idToken: string }): Promise<Pick<InvitationActionState, "error" | "message">> {
   const sessionToken = (await cookies()).get(sessionCookieName)?.value ?? "";
@@ -51,20 +53,14 @@ export async function representativeInvitationAction(
       throw new AccessError("INVALID_INPUT", "Invalid invitation action");
     });
     if (result) {
-      issued = {
-        url: result.invitationUrl,
-        email: result.invitation.email,
-        role: result.invitation.role,
-        universityName: result.invitation.universityName,
-        expiresAt: result.invitation.expiresAt,
-      };
+      issued = issuedInvitationDetails(result);
     }
   } catch (error) {
     if (error instanceof AccessError) {
       if (error.code === "INVALID_INPUT") return { error: "Enter a valid email address.", message: null, issued: null };
       if (error.code === "CONFLICT") return { error: "This email already has a pending invitation or active Representative Appointment.", message: null, issued: null };
       if (error.code === "AUTHENTICATION_REQUIRED") return { error: "Your session has expired. Sign in again.", message: null, issued: null };
-      if (error.code === "OPERATION_FAILED") return { error: "The invitation could not be created. Try again.", message: null, issued: null };
+      if (error.code === "OPERATION_FAILED") return { error: invitationCopy.createFailed, message: null, issued: null };
       if (error.code === "NOT_FOUND_OR_FORBIDDEN") return { error: "That invitation could not be changed.", message: null, issued: null };
     }
     return { error: "The invitation could not be changed. Try again.", message: null, issued: null };
@@ -73,7 +69,7 @@ export async function representativeInvitationAction(
   revalidatePath("/portal/team");
   return {
     error: null,
-    message: intent === "invite" ? "Invitation created. Copy and share its link privately." : "Invitation revoked.",
+    message: intent === "invite" ? invitationCopy.created : "Invitation revoked.",
     issued,
   };
 }

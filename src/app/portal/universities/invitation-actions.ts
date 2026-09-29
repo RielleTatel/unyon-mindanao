@@ -6,6 +6,8 @@ import { cookies } from "next/headers";
 import { AccessError, sessionCookieName } from "@/features/access/server";
 import { withUniversityAdminInvitationFeature } from "@/features/directory/server";
 import type { InvitationActionState } from "@/features/directory/contracts";
+import { invitationCopy } from "@/features/directory/invitation-copy";
+import { issuedInvitationDetails } from "@/features/directory/issued-invitation";
 
 export async function universityAdminInvitationAction(
   _previousState: InvitationActionState,
@@ -28,13 +30,7 @@ export async function universityAdminInvitationAction(
           sessionToken,
         }),
       );
-      issued = {
-        url: result.invitationUrl,
-        email: result.invitation.email,
-        role: result.invitation.role,
-        universityName: result.invitation.universityName,
-        expiresAt: result.invitation.expiresAt,
-      };
+      issued = issuedInvitationDetails(result);
     } else if (intent === "revoke") {
       await withUniversityAdminInvitationFeature((feature) =>
         feature.revoke({
@@ -67,7 +63,7 @@ export async function universityAdminInvitationAction(
       if (error.code === "OPERATION_FAILED") {
         revalidatePath("/portal/universities");
         return {
-          error: "The invitation could not be created. Try again.",
+          error: invitationCopy.createFailed,
           message: null,
           issued: null,
         };
@@ -80,7 +76,7 @@ export async function universityAdminInvitationAction(
   revalidatePath("/portal/universities");
   return {
     error: null,
-    message: intent === "invite" ? "Invitation created. Copy and share its link privately." : "Invitation revoked.",
+    message: intent === "invite" ? invitationCopy.created : "Invitation revoked.",
     issued,
   };
 }

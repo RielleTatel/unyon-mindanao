@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import { memberUniversityAction } from "@/app/portal/universities/actions";
 import { universityAdminInvitationAction } from "@/app/portal/universities/invitation-actions";
 import { IssuedInvitationLink } from "./issued-invitation-link";
+import { invitationCopy } from "../invitation-copy";
 import type {
   InvitationActionState,
   MemberUniversityRecord,
@@ -223,18 +224,27 @@ function InvitationPanel({
   invitations: UniversityAdminInvitationRecord[];
   university: MemberUniversityRecord;
 }) {
+  const [state, formAction, isPending] = useActionState(
+    universityAdminInvitationAction,
+    invitationInitialState,
+  );
+
   return (
     <section className="mt-6 border-t border-primary/10 pt-5" aria-label={`University Admin invitations for ${university.name}`}>
       <p className="m-0 text-xs font-extrabold tracking-[0.12em] text-primary uppercase">
         University Admin access
       </p>
       {university.status === "ACTIVE" ? (
-        <InvitationForm universityId={university.id} />
+        <InvitationForm formAction={formAction} isPending={isPending} universityId={university.id} />
       ) : (
         <p className="mt-3 mb-0 text-sm text-muted-foreground">
-          Restore this Member University before sending an invitation.
+          {invitationCopy.restoreUniversityBeforeInvite}
         </p>
       )}
+      <div className="mt-3">
+        <ActionFeedback error={state.error} message={state.message} />
+        {state.issued ? <IssuedInvitationLink issued={state.issued} key={state.issued.url} /> : null}
+      </div>
 
       <div className="mt-5">
         <h4 className="m-0 text-sm font-bold">Pending invitations</h4>
@@ -250,7 +260,7 @@ function InvitationPanel({
                     Expires {formatExpiry(invitation.expiresAt)}
                   </p>
                 </div>
-                <RevokeInvitationForm invitationId={invitation.id} />
+                <RevokeInvitationForm formAction={formAction} invitationId={invitation.id} isPending={isPending} />
               </li>
             ))}
           </ul>
@@ -260,12 +270,15 @@ function InvitationPanel({
   );
 }
 
-function InvitationForm({ universityId }: { universityId: string }) {
-  const [state, formAction, isPending] = useActionState(
-    universityAdminInvitationAction,
-    invitationInitialState,
-  );
-
+function InvitationForm({
+  formAction,
+  isPending,
+  universityId,
+}: {
+  formAction: (formData: FormData) => void;
+  isPending: boolean;
+  universityId: string;
+}) {
   return (
     <form action={formAction} className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
       <input name="intent" type="hidden" value="invite" />
@@ -283,27 +296,25 @@ function InvitationForm({ universityId }: { universityId: string }) {
         />
       </label>
       <button className={`${buttonClassName} self-end`} disabled={isPending} type="submit">
-        {isPending ? "Creating…" : "Create invitation link"}
+        {isPending ? invitationCopy.creating : invitationCopy.createButton}
       </button>
-      <div className="sm:col-span-2">
-        <ActionFeedback error={state.error} message={state.message} />
-        {state.issued ? <IssuedInvitationLink issued={state.issued} key={state.issued.url} /> : null}
-      </div>
     </form>
   );
 }
 
-function RevokeInvitationForm({ invitationId }: { invitationId: string }) {
-  const [state, formAction, isPending] = useActionState(
-    universityAdminInvitationAction,
-    invitationInitialState,
-  );
-
+function RevokeInvitationForm({
+  formAction,
+  invitationId,
+  isPending,
+}: {
+  formAction: (formData: FormData) => void;
+  invitationId: string;
+  isPending: boolean;
+}) {
   return (
     <form action={formAction} className="flex flex-wrap items-center gap-2">
       <input name="intent" type="hidden" value="revoke" />
       <input name="id" type="hidden" value={invitationId} />
-      <ActionFeedback error={state.error} message={state.message} />
       <button
         className="inline-flex min-h-9 items-center justify-center rounded-lg border border-primary/25 px-3 text-xs font-bold text-primary hover:bg-card focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-60"
         disabled={isPending}
