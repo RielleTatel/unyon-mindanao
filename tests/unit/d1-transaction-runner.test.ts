@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   D1BatchTransaction,
@@ -172,5 +172,75 @@ describe("D1 transaction runner", () => {
         count: number;
       }>(),
     ).resolves.toEqual({ count: 0 });
+  });
+
+  it("returns an ordinary read without any writes and validates authority against a fresh primary session", async () => {
+    database = new LocalD1Database();
+    await seedActiveSession();
+    const batch = vi.spyOn(database, "batch");
+    const sessions = vi.spyOn(database, "withSession");
+    await expect(makeRunner().run({ correlationId: "ordinary-read", tokenHash, mode: "read" },
+      async (transaction) => transaction.capabilities.database.first<{ full_name: string }>("SELECT full_name FROM portal_users WHERE id = ?", ids.user),
+    )).resolves.toEqual({ full_name: "Admin" });
+    expect(batch).not.toHaveBeenCalled();
+    expect(sessions.mock.calls).toEqual([["first-primary"], ["first-primary"]]);
+  });
+
+  it.each([
+    ["session revocation", "UPDATE portal_sessions SET revoked_at = '2026-09-25T03:00:00.000Z'"],
+    ["user deactivation", "UPDATE portal_users SET status = 'DISABLED'"],
+    ["Appointment ending", "UPDATE appointments SET ends_at = '2026-09-25T02:59:59.000Z'"],
+    ["role replacement", "UPDATE appointments SET role = 'REPRESENTATIVE', university_id = 'university-a'"],
+  ])("discards an ordinary read after %s during execution and audits the denial", async (_case, change) => {
+    database = new LocalD1Database();
+    await seedActiveSession();
+    await database.batch([database.prepare("INSERT INTO member_universities (id, name, slug) VALUES ('university-a', 'University A', 'university-a')")]);
+    await expect(makeRunner().run({ correlationId: "revoked-read", tokenHash, mode: "read" }, async () => {
+      await database.batch([database.prepare(change)]);
+      return { privateContent: "must not be released" };
+    })).rejects.toMatchObject({ code: "AUTHENTICATION_REQUIRED" });
+    await expect(database.prepare("SELECT action FROM audit_logs").first()).resolves.toEqual({ action: "access.denied" });
+  });
+
+  it("rejects a scoped read if its captured Appointment moves to another university", async () => {
+    database = new LocalD1Database();
+    await seedActiveSession();
+    await database.batch([
+      database.prepare("INSERT INTO member_universities (id, name, slug) VALUES ('university-a', 'University A', 'university-a'), ('university-b', 'University B', 'university-b')"),
+      database.prepare("UPDATE appointments SET role = 'UNIVERSITY_ADMIN', university_id = 'university-a'"),
+    ]);
+    await expect(makeRunner().run({ correlationId: "scope-changed", tokenHash, mode: "read" }, async () => {
+      await database.batch([database.prepare("UPDATE appointments SET university_id = 'university-b'")]);
+      return "private University A content";
+    })).rejects.toMatchObject({ code: "AUTHENTICATION_REQUIRED" });
+  });
+
+  it("checks session expiry at result release rather than retaining the initial operation time", async () => {
+    database = new LocalD1Database();
+    await seedActiveSession();
+    await database.batch([database.prepare("UPDATE portal_sessions SET expires_at = '2026-09-25T03:00:01.000Z'")]);
+    let now = fixedNow;
+    const runner = new D1TransactionRunner(database as unknown as D1Database, undefined, () => now);
+    await expect(runner.run({ correlationId: "expired-during-read", tokenHash, mode: "read" }, async () => {
+      now = new Date("2026-09-25T03:00:02.000Z");
+      return "private content";
+    })).rejects.toMatchObject({ code: "AUTHENTICATION_REQUIRED" });
+  });
+
+  it("keeps an audited read atomic and rejects its audit if authority ends before commit", async () => {
+    database = new LocalD1Database();
+    await seedActiveSession();
+    const runner = makeRunner();
+    await runner.run({ correlationId: "audited-read", tokenHash, mode: "read" }, async (transaction) => {
+      await transaction.appendAudit(auditRecord({ action: "birth-date.read" }));
+      return "restricted value";
+    });
+    await expect(database.prepare("SELECT action FROM audit_logs").all()).resolves.toMatchObject({ results: [{ action: "birth-date.read" }] });
+    await expect(runner.run({ correlationId: "revoked-audited-read", tokenHash, mode: "read" }, async (transaction) => {
+      await transaction.appendAudit(auditRecord({ action: "must.not.persist" }));
+      await database.batch([database.prepare("UPDATE appointments SET ends_at = '2026-09-25T02:59:59.000Z'")]);
+      return "must not be released";
+    })).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(database.prepare("SELECT COUNT(*) AS count FROM audit_logs").first()).resolves.toEqual({ count: 1 });
   });
 });

@@ -74,7 +74,7 @@ export function createProtectedOperationFactory<
           );
 
           return await dependencies.transactions.run(
-            { correlationId: request.correlationId, tokenHash },
+            { correlationId: request.correlationId, tokenHash, mode: "read" },
             async (transaction, actor) => {
               const subject = await definition.resolveSubject(
                 {

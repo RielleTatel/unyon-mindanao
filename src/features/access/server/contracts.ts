@@ -76,7 +76,7 @@ export interface TransactionRunner<
   Capabilities extends object = Record<string, never>,
 > {
   run<Result>(
-    input: { correlationId: string; tokenHash: string },
+    input: { correlationId: string; tokenHash: string; mode?: "read" | "write" },
     work: (
       transaction: ProtectedTransaction<Capabilities>,
       actor: PortalActor,

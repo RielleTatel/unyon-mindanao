@@ -51,6 +51,16 @@ export class D1BatchTransaction {
     this.writes.push(this.database.prepare(query).bind(...values));
   }
 
+  get hasWrites() {
+    return this.writes.length > 0;
+  }
+
+  prependGuard(query: string, ...values: unknown[]) {
+    const pending = this.writes.splice(0);
+    this.enqueueGuard(query, ...values);
+    this.writes.push(...pending);
+  }
+
   enqueueGuard(query: string, ...values: unknown[]) {
     const assertionId = crypto.randomUUID();
     this.enqueue(
@@ -121,7 +131,7 @@ export class D1TransactionRunner<
   ) {}
 
   async run<Result>(
-    input: { correlationId: string; tokenHash: string },
+    input: { correlationId: string; tokenHash: string; mode?: "read" | "write" },
     work: (
       transaction: ProtectedTransaction<Capabilities>,
       actor: PortalActor,
@@ -185,32 +195,27 @@ export class D1TransactionRunner<
         portalUserId: firstRow.portal_user_id,
       };
       const transaction = new D1BatchTransaction(database, occurredAt);
-      const appointmentIds = actor.appointments.map(({ id }) => id);
-      transaction.enqueueGuard(
-        `SELECT 1
+      const capturedUserId = actor.portalUserId;
+      const capturedAppointments = JSON.stringify(actor.appointments);
+      const capturedAppointmentCount = actor.appointments.length;
+      const authorityQuery = `SELECT 1
          FROM portal_sessions AS s
          JOIN portal_users AS u ON u.id = s.portal_user_id
          WHERE s.token_hash = ?
            AND s.portal_user_id = ?
-           AND s.expires_at > ?
+           AND s.expires_at > COALESCE(?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
            AND s.revoked_at IS NULL
            AND u.status = 'ACTIVE'
            AND (
              SELECT COUNT(*)
-             FROM appointments AS a
+             FROM appointments AS a JOIN json_each(?) AS captured
+               ON a.id = json_extract(captured.value, '$.id')
              WHERE a.portal_user_id = u.id
-               AND a.id IN (${appointmentIds.map(() => "?").join(", ")})
-               AND a.starts_at <= ?
-               AND (a.ends_at IS NULL OR a.ends_at > ?)
-           ) = ?`,
-        input.tokenHash,
-        actor.portalUserId,
-        occurredAt.toISOString(),
-        ...appointmentIds,
-        occurredAt.toISOString(),
-        occurredAt.toISOString(),
-        appointmentIds.length,
-      );
+               AND a.role = json_extract(captured.value, '$.role')
+               AND a.university_id IS json_extract(captured.value, '$.universityId')
+               AND a.starts_at <= COALESCE(?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+               AND (a.ends_at IS NULL OR a.ends_at > COALESCE(?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))
+           ) = ?`;
       const result = await work(
         {
           appendAudit: transaction.appendAudit,
@@ -219,6 +224,17 @@ export class D1TransactionRunner<
         },
         actor,
       );
+      const guardTime = this.clock?.().toISOString() ?? null;
+      const authorityValues = [input.tokenHash, capturedUserId, guardTime,
+        capturedAppointments, guardTime, guardTime, capturedAppointmentCount];
+      if (input.mode === "read" && !transaction.hasWrites) {
+        // A fresh session makes this final authority check the primary query.
+        const primary = this.database.withSession("first-primary");
+        const valid = await primary.prepare(authorityQuery).bind(...authorityValues).first();
+        if (!valid) throw authenticationRequired();
+        return result;
+      }
+      transaction.prependGuard(authorityQuery, ...authorityValues);
       await transaction.commit();
       return result;
     } catch (error) {
