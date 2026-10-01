@@ -1,6 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
+import { collectionPage, paginationInput, type PageSelection } from "@/shared/pagination";
 import { AccessError, createProtectedOperationFactory, type PortalActor, type SessionService, type TransactionRunner } from "@/features/access/server";
 import type { AnnouncementRecord, ShortcutRecord } from "../contracts";
 
@@ -13,26 +14,45 @@ const shortcut = z.object({
 }).refine((input) => !input.id || input.version !== undefined);
 
 export interface CommunicationsRepository {
-  announcements(administrative: boolean): Promise<AnnouncementRecord[]>;
+  recentAnnouncements(): Promise<{ id: string; title: string; excerpt: string }[]>;
+  announcements(administrative: boolean, selection?: PageSelection): Promise<AnnouncementRecord[]>;
   announcement(id: string): Promise<AnnouncementRecord | null>;
   saveAnnouncement(input: z.infer<typeof draft> & { id: string }): Promise<AnnouncementRecord>;
   transition(id: string, version: number, status: AnnouncementRecord["status"], now: Date): Promise<AnnouncementRecord>;
   shortcuts(administrative: boolean): Promise<ShortcutRecord[]>;
   shortcut(id: string): Promise<ShortcutRecord | null>;
   saveShortcut(input: z.infer<typeof shortcut> & { id: string }): Promise<ShortcutRecord>;
-  reorder(ids: string[]): Promise<void>;
+  reorder(ids: string[], expected: ShortcutRecord[]): Promise<void>;
 }
 
 export function createCommunicationsFeature(dependencies: { sessions: Pick<SessionService, "hashSessionToken">; transactions: TransactionRunner<{ communications: CommunicationsRepository }> }) {
   const factory = createProtectedOperationFactory(dependencies);
   return {
+    recentAnnouncements: factory.query({
+      intent: "announcement.recent", input: z.object({}), resolveSubject: async () => ({ id: "recent-announcements", kind: "AnnouncementDirectory" }), authorize: () => true,
+      execute: ({ transaction }) => transaction.capabilities.communications.recentAnnouncements(),
+    }),
     listAnnouncements: factory.query({
       intent: "announcement.list", input: z.object({}), resolveSubject: async () => ({ id: "announcements", kind: "AnnouncementDirectory" }), authorize: () => true,
       execute: ({ actor, transaction }) => transaction.capabilities.communications.announcements(isSuperAdmin(actor)),
     }),
+    announcementPage: factory.query({
+      intent: "announcement.page", input: paginationInput, resolveSubject: async () => ({ id: "announcements", kind: "AnnouncementDirectory" }), authorize: () => true,
+      execute: async ({ actor, transaction }, input) => ({
+        ...collectionPage(await transaction.capabilities.communications.announcements(isSuperAdmin(actor), { limit: input.pageSize + 1, offset: input.page * input.pageSize }), input),
+        canManage: isSuperAdmin(actor),
+      }),
+    }),
     listShortcuts: factory.query({
       intent: "shortcut.list", input: z.object({}), resolveSubject: async () => ({ id: "shortcuts", kind: "ShortcutDirectory" }), authorize: () => true,
       execute: ({ actor, transaction }) => transaction.capabilities.communications.shortcuts(isSuperAdmin(actor)),
+    }),
+    shortcutWorkspace: factory.query({
+      intent: "shortcut.workspace", input: z.object({}), resolveSubject: async () => ({ id: "shortcuts", kind: "ShortcutDirectory" }), authorize: () => true,
+      execute: async ({ actor, transaction }) => ({
+        records: await transaction.capabilities.communications.shortcuts(isSuperAdmin(actor)),
+        canManage: isSuperAdmin(actor),
+      }),
     }),
     saveAnnouncement: factory.mutation({
       intent: "announcement.save", action: "announcement.saved", input: draft,
@@ -72,7 +92,26 @@ export function createCommunicationsFeature(dependencies: { sessions: Pick<Sessi
       execute: async ({ transaction }, input) => {
         const records = await transaction.capabilities.communications.shortcuts(true);
         if (records.length !== input.ids.length || records.some(({ id }) => !input.ids.includes(id))) throw new AccessError("CONFLICT", "Shortcut list changed. Refresh and reorder again.");
-        await transaction.capabilities.communications.reorder(input.ids);
+        await transaction.capabilities.communications.reorder(input.ids, records);
+        return { reordered: true };
+      },
+    }),
+    moveShortcut: factory.mutation({
+      intent: "shortcut.move", action: "shortcuts.reordered",
+      input: z.object({ ...revision, direction: z.enum(["up", "down"]) }),
+      resolveSubject: async () => ({ id: "shortcuts", kind: "ShortcutDirectory" }),
+      authorize: ({ actor }) => isSuperAdmin(actor),
+      execute: async ({ transaction }, input) => {
+        const repository = transaction.capabilities.communications;
+        const records = await repository.shortcuts(true);
+        const index = records.findIndex(({ id }) => id === input.id);
+        const target = index + (input.direction === "up" ? -1 : 1);
+        if (index < 0 || records[index].version !== input.version || target < 0 || target >= records.length) {
+          throw new AccessError("CONFLICT", "Shortcut list changed. Refresh and reorder again.");
+        }
+        const ids = records.map(({ id }) => id);
+        [ids[index], ids[target]] = [ids[target], ids[index]];
+        await repository.reorder(ids, records);
         return { reordered: true };
       },
     }),

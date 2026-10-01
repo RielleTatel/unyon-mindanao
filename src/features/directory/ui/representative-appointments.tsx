@@ -1,9 +1,9 @@
 "use client";
+import { loadPortalIdentity } from "@/features/access/client/load-portal-identity";
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { endRepresentativeAppointment } from "@/app/portal/team/actions";
-import { signInWithPortalIdentity } from "@/features/access/client/firebase-auth";
 import type { RepresentativeAppointmentRecord } from "../contracts";
 
 export function RepresentativeAppointments({ appointments, actorEmail }: { appointments: RepresentativeAppointmentRecord[]; actorEmail: string }) {
@@ -32,6 +32,7 @@ function EndAppointment({ id, actorEmail }: { id: string; actorEmail: string }) 
     setPending(true);
     setError("");
     try {
+      const { signInWithPortalIdentity } = await loadPortalIdentity();
       const idToken = await signInWithPortalIdentity(actorEmail, password);
       const result = await endRepresentativeAppointment({ id, idToken });
       if (result.error) setError(result.error);

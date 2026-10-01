@@ -19,6 +19,7 @@ export async function communicationsAction(_previous: CommunicationsActionState,
         case "transition-announcement": return feature.transitionAnnouncement(request({ id, version, status: text("status") }));
         case "save-shortcut": return feature.saveShortcut(request({ id, version, label: text("label"), url: text("url"), icon: text("icon") || null, active: form.get("active") === "on" }));
         case "reorder-shortcuts": return feature.reorderShortcuts(request({ ids: JSON.parse(text("ids")) }));
+        case "move-shortcut": return feature.moveShortcut(request({ id, version, direction: text("direction") }));
         default: throw new AccessError("INVALID_INPUT", "Invalid action");
       }
     });

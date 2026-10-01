@@ -1,7 +1,8 @@
 import "server-only";
 import { z } from "zod";
+import { collectionPage, paginationInput, type PageSelection } from "@/shared/pagination";
 import { AccessError, createProtectedOperationFactory, retryDatabaseTransactions, type PortalActor, type SessionService, type TransactionRunner } from "@/features/access/server";
-import type { EvaluationAnswer, EvaluationQuestion, EvaluationRecord, EvaluationResults } from "../contracts";
+import type { EvaluationAnswer, EvaluationQuestion, EvaluationRecord, EvaluationResults, EvaluationSummary } from "../contracts";
 
 export interface EvaluationSubject {
   id: string; kind: "EventEvaluation"; title: string; status: string; ownerUniversityId: string | null;
@@ -9,7 +10,8 @@ export interface EvaluationSubject {
   templateVersion: number; questions: EvaluationQuestion[];
 }
 export interface EvaluationRepository {
-  list(): Promise<EvaluationSubject[]>;
+  list(userId: string, input: { actorRoles: PortalActor["appointments"] } & Partial<PageSelection>): Promise<(EvaluationSubject & { eligible: boolean })[]>;
+  openSummaries(userId: string, now: Date): Promise<EvaluationSummary[]>;
   get(id: string): Promise<EvaluationSubject | null>;
   eligible(userId: string, at: Date): Promise<boolean>;
   response(eventId: string, userId: string): Promise<EvaluationRecord["response"]>;
@@ -39,6 +41,18 @@ export function createEvaluationFeature(dependencies: { sessions: Pick<SessionSe
   });
   return {
     results,
+    openSummaries: factory.query({
+      intent: "evaluation.open_summaries", input: z.object({}), resolveSubject: async () => ({ id: "open-evaluations", kind: "EvaluationDirectory" }), authorize: () => true,
+      execute: ({ actor, transaction, occurredAt }) => transaction.capabilities.evaluations.openSummaries(actor.portalUserId, occurredAt),
+    }),
+    page: factory.query({ intent: "evaluation.page", input: paginationInput, resolveSubject: async () => ({ id: "evaluations", kind: "EvaluationDirectory" }), authorize: () => true,
+      execute: async ({ actor, transaction, occurredAt }, input) => {
+        const repository = transaction.capabilities.evaluations;
+        const subjects = await repository.list(actor.portalUserId, { actorRoles: actor.appointments, limit: input.pageSize + 1, offset: input.page * input.pageSize });
+        const page = collectionPage(subjects, input);
+        return { ...page, records: await projectRecords(page.records, repository, actor, occurredAt), canManage: admin(actor) };
+      },
+    }),
     async exportCsv(request: { input: unknown; sessionToken: string; correlationId: string }) {
       const disclosure = await results(request);
       if (disclosure.disclosure === "WITHHELD") throw new AccessError("NOT_FOUND_OR_FORBIDDEN", "Results not available");
@@ -49,12 +63,8 @@ export function createEvaluationFeature(dependencies: { sessions: Pick<SessionSe
     },
     list: factory.query({ intent: "evaluation.list", input: z.object({}), resolveSubject: async () => ({ id: "evaluations", kind: "EvaluationDirectory" }), authorize: () => true,
       execute: async ({ actor, transaction, occurredAt }): Promise<EvaluationRecord[]> => {
-        const repository = transaction.capabilities.evaluations; const records: EvaluationRecord[] = [];
-        for (const subject of await repository.list()) {
-          if (!visible(actor, subject)) continue;
-          records.push({ eventId: subject.id, title: subject.title, questions: subject.questions, templateVersion: subject.templateVersion, opensAt: subject.opensAt.toISOString(), closesAt: subject.closesAt.toISOString(), closed: subject.closed, version: subject.version, canRespond: isOpen(subject, occurredAt) && await repository.eligible(actor.portalUserId, subject.endsAt), canViewResults: resultsAllowed(actor, subject), response: await repository.response(subject.id, actor.portalUserId) });
-        }
-        return records;
+        const repository = transaction.capabilities.evaluations;
+        return projectRecords(await repository.list(actor.portalUserId, { actorRoles: actor.appointments }), repository, actor, occurredAt);
       },
     }),
     submit: factory.mutation({ intent: "evaluation.submit", action: "evaluation.response_saved", input: idInput.extend({ version: z.number().int().min(0), answers: z.array(z.object({ position: z.number().int().min(0), rating: z.number().int().min(1).max(5).nullable(), comment: z.string().trim().max(2000).nullable() })).max(30) }),
@@ -84,5 +94,13 @@ export function createEvaluationFeature(dependencies: { sessions: Pick<SessionSe
     createTemplate: factory.mutation({ intent: "evaluation.template.create", action: "evaluation.template_created", input: z.object({ questions }), resolveSubject: async () => ({ id: "templates", kind: "EvaluationTemplateDirectory" }), authorize: ({ actor }) => admin(actor), execute: async ({ transaction }, input) => { await transaction.capabilities.evaluations.createTemplate(input.questions); return { saved: true }; } }),
     expireResponses: factory.mutation({ intent: "evaluation.retention", action: "evaluation.responses_expired", input: z.object({}), resolveSubject: async () => ({ id: "evaluation-retention", kind: "EvaluationResponseDirectory" }), authorize: ({ actor }) => admin(actor), execute: async ({ transaction, occurredAt }) => ({ removed: await transaction.capabilities.evaluations.expireResponses(occurredAt) }), auditMetadata: (result) => ({ removedCount: result.removed }) }),
   };
+}
+async function projectRecords(subjects: (EvaluationSubject & { eligible: boolean })[], repository: EvaluationRepository, actor: PortalActor, now: Date): Promise<EvaluationRecord[]> {
+  const records: EvaluationRecord[] = [];
+  for (const subject of subjects) {
+    if (!visible(actor, subject)) continue;
+    records.push({ eventId: subject.id, title: subject.title, questions: subject.questions, templateVersion: subject.templateVersion, opensAt: subject.opensAt.toISOString(), closesAt: subject.closesAt.toISOString(), closed: subject.closed, version: subject.version, canRespond: isOpen(subject, now) && subject.eligible, canViewResults: resultsAllowed(actor, subject), response: await repository.response(subject.id, actor.portalUserId) });
+  }
+  return records;
 }
 function csvCell(value: string | number) { const text = String(value); return `"${(/^[\s]*[=+@\-]/u.test(text) ? "'" + text : text).replaceAll('"', '""')}"`; }

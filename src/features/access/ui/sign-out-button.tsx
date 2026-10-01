@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { signOutPortalIdentity } from "../client/firebase-auth";
 import { Button } from "@/shared/ui/button";
+import { loadPortalIdentity } from "../client/load-portal-identity";
 
 export function SignOutButton() {
   const router = useRouter();
@@ -43,6 +43,7 @@ export function SignOutButton() {
     }
 
     try {
+      const { signOutPortalIdentity } = await loadPortalIdentity();
       await signOutPortalIdentity();
       firebaseSignedOut = true;
     } catch {

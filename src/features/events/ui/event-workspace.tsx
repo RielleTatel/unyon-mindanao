@@ -1,19 +1,13 @@
-"use client";
-
 import Link from "next/link";
-import { useActionState, useState } from "react";
 
-import { eventAction, type EventActionState } from "@/app/portal/events/actions";
 import type { EventRecord, EventUniversityChoice } from "../contracts";
-import { formatEventRange } from "../format";
+import { formatEventRange, manilaDateKey } from "../format";
+import { EventControls, EventDraftForm } from "./event-forms";
+import { primaryButton, secondaryButton } from "./event-styles";
+import { Pagination } from "@/shared/ui/pagination";
+import type { PageMetadata } from "@/shared/pagination";
 
-const initialState: EventActionState = { error: null, message: null };
-const fieldClass =
-  "mt-1 block min-h-11 w-full rounded-xl border border-primary/20 bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
-const primaryButton =
-  "inline-flex min-h-10 items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-60";
-const secondaryButton =
-  "inline-flex min-h-10 items-center justify-center rounded-xl border border-primary/25 px-4 py-2 text-sm font-bold text-primary transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-60";
+const monthFormatter = new Intl.DateTimeFormat("en-PH", { month: "long", year: "numeric", timeZone: "Asia/Manila" });
 
 export function EventWorkspace({
   canCreate,
@@ -23,6 +17,7 @@ export function EventWorkspace({
   allowConfederation,
   universityChoices,
   view,
+  pagination,
 }: {
   canCreate: boolean;
   events: EventRecord[];
@@ -31,6 +26,7 @@ export function EventWorkspace({
   allowConfederation: boolean;
   universityChoices: EventUniversityChoice[];
   view: "list" | "calendar";
+  pagination: PageMetadata;
 }) {
   const countLabel = `${events.length} ${events.length === 1 ? "event" : "events"}`;
 
@@ -63,6 +59,7 @@ export function EventWorkspace({
             {events.map((event) => <li key={event.id}><EventCard event={event} /></li>)}
           </ul>
         )}
+        {view === "list" ? <Pagination href="/portal/events?view=list" pagination={pagination} /> : null}
       </section>
 
       {canCreate ? (
@@ -75,61 +72,6 @@ export function EventWorkspace({
         </aside>
       )}
     </div>
-  );
-}
-
-function EventDraftForm({
-  allowConfederation,
-  ownerUniversityIds,
-  universityChoices,
-}: {
-  allowConfederation: boolean;
-  ownerUniversityIds: string[];
-  universityChoices: EventUniversityChoice[];
-}) {
-  const [state, formAction, isPending] = useActionState(eventAction, initialState);
-  const [ownerUniversityId, setOwnerUniversityId] = useState(ownerUniversityIds[0] ?? "");
-  const ownerChoices = universityChoices.filter(({ id }) => ownerUniversityIds.includes(id));
-
-  return (
-    <aside className="h-fit rounded-3xl border border-primary/15 bg-card p-6 shadow-[0_14px_40px_rgba(24,59,44,0.06)]">
-      <p className="m-0 text-xs font-extrabold tracking-[0.14em] text-primary uppercase">Event management</p>
-      <h2 className="mt-3 mb-2 font-serif text-2xl font-medium">Create a draft</h2>
-      <p className="mt-0 mb-5 text-sm leading-6 text-muted-foreground">Dates use Manila time. Drafts are private to the Confederation or Owning University until published.</p>
-      <form action={formAction} className="grid gap-3">
-        <input name="intent" type="hidden" value="create" />
-        <label className="block text-sm font-semibold">Event title<input className={fieldClass} maxLength={180} minLength={3} name="title" required /></label>
-        <label className="block text-sm font-semibold">Category<input className={fieldClass} maxLength={80} name="category" placeholder="Assembly, forum, workshop…" required /></label>
-        <label className="block text-sm font-semibold">Description<textarea className={`${fieldClass} min-h-24 resize-y`} maxLength={5000} name="description" required rows={3} /></label>
-        <label className="block text-sm font-semibold">Starts<input className={fieldClass} name="startsAt" required type="datetime-local" /></label>
-        <label className="block text-sm font-semibold">Ends<input className={fieldClass} name="endsAt" required type="datetime-local" /></label>
-        <label className="block text-sm font-semibold">Physical venue<input className={fieldClass} maxLength={300} name="location" placeholder="Building or venue" /></label>
-        <label className="block text-sm font-semibold">Online link <span className="font-normal text-muted-foreground">(optional)</span><input className={fieldClass} maxLength={2000} name="onlineUrl" placeholder="https://…" type="url" /></label>
-        <label className="block text-sm font-semibold">Contact person <span className="font-normal text-muted-foreground">(optional)</span><input className={fieldClass} maxLength={160} name="contactPerson" /></label>
-        <label className="block text-sm font-semibold">Owner
-          <select className={fieldClass} onChange={(event) => setOwnerUniversityId(event.target.value)} value={ownerUniversityId} name="ownerUniversityId">
-            {allowConfederation ? <option value="">Unyon Mindanao</option> : null}
-            {ownerChoices.map(({ id, name }) => <option key={id} value={id}>{name}</option>)}
-          </select>
-        </label>
-        {universityChoices.length > 0 ? (
-          <fieldset className="rounded-xl border border-primary/15 px-3 py-2">
-            <legend className="px-1 text-sm font-semibold">Co-hosts <span className="font-normal text-muted-foreground">(optional)</span></legend>
-            <div className="grid max-h-36 gap-2 overflow-y-auto py-1">
-              {universityChoices.filter(({ id }) => id !== ownerUniversityId).map(({ id, name }) => (
-                <label className="flex items-center gap-2 text-sm" key={id}>
-                  <input className="accent-primary" name="coHostUniversityIds" type="checkbox" value={id} />{name}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-        ) : null}
-        <label className="flex items-center gap-2 py-1 text-sm font-semibold"><input className="h-4 w-4 accent-primary" name="allDay" type="checkbox" />All-day event</label>
-        <ActionFeedback error={state.error} message={state.message} />
-        <button className={primaryButton} disabled={isPending} type="submit">{isPending ? "Saving…" : "Save event draft"}</button>
-      </form>
-      <p className="mt-4 mb-0 text-xs leading-5 text-muted-foreground">Co-hosts receive attribution on the event. Publishing and editing authority stay with its owner.</p>
-    </aside>
   );
 }
 
@@ -149,40 +91,8 @@ function EventCard({ event }: { event: EventRecord }) {
         <p className="m-0"><span className="font-semibold">Where:</span> {event.location ?? "Online"}</p>
         {event.coHosts.length ? <p className="m-0 sm:col-span-2"><span className="font-semibold">Co-hosted with:</span> {event.coHosts.map(({ name }) => name).join(", ")}</p> : null}
       </div>
-      {event.manageable ? <EventControls event={event} /> : null}
+      {event.manageable ? <EventControls event={{ id: event.id, version: event.version, status: event.status, canComplete: event.canComplete }} /> : null}
     </article>
-  );
-}
-
-export function EventControls({ event }: { event: EventRecord }) {
-  const actions = event.status === "DRAFT"
-    ? [{ intent: "publish", label: "Publish event" }]
-    : event.status === "PUBLISHED"
-      ? [
-          ...(event.canComplete ? [{ intent: "complete", label: "Mark complete" }] : []),
-          { intent: "cancel", label: "Cancel event" },
-        ]
-      : ["CANCELLED", "COMPLETED"].includes(event.status)
-        ? [{ intent: "archive", label: "Archive event" }]
-        : [];
-
-  return actions.length ? (
-    <div className="mt-5 flex flex-wrap gap-2">
-      {actions.map(({ intent, label }) => <TransitionForm event={event} intent={intent} key={intent} label={label} />)}
-    </div>
-  ) : null;
-}
-
-function TransitionForm({ event, intent, label }: { event: EventRecord; intent: string; label: string }) {
-  const [state, formAction, isPending] = useActionState(eventAction, initialState);
-  return (
-    <form action={formAction} className="flex flex-wrap items-center gap-2">
-      <input name="intent" type="hidden" value={intent} />
-      <input name="id" type="hidden" value={event.id} />
-      <input name="version" type="hidden" value={event.version} />
-      <button className={secondaryButton} disabled={isPending} type="submit">{isPending ? "Saving…" : label}</button>
-      <ActionFeedback error={state.error} message={state.message} />
-    </form>
   );
 }
 
@@ -190,11 +100,19 @@ function Calendar({ events, month }: { events: EventRecord[]; month: string }) {
   const [year, monthNumber] = month.split("-").map(Number);
   const firstDay = new Date(Date.UTC(year!, monthNumber! - 1, 1)).getUTCDay();
   const dayCount = new Date(Date.UTC(year!, monthNumber!, 0)).getUTCDate();
+  const eventsByDate = new Map<string, EventRecord[]>();
+  for (const event of events) {
+    const key = manilaDateKey(event.startsAt);
+    if (!key.startsWith(`${month}-`)) continue;
+    const dayEvents = eventsByDate.get(key);
+    if (dayEvents) dayEvents.push(event);
+    else eventsByDate.set(key, [event]);
+  }
   const cells = Array.from({ length: Math.ceil((firstDay + dayCount) / 7) * 7 }, (_, index) => {
     const day = index - firstDay + 1;
     if (day < 1 || day > dayCount) return null;
     const key = `${month}-${String(day).padStart(2, "0")}`;
-    return { day, events: events.filter((event) => manilaDateKey(event.startsAt) === key) };
+    return { day, events: eventsByDate.get(key) ?? [] };
   });
   const previous = shiftMonth(month, -1);
   const next = shiftMonth(month, 1);
@@ -237,27 +155,13 @@ export function StatusPill({ status }: { status: EventRecord["status"] }) {
   return <span className={`rounded-full px-3 py-1 text-xs font-bold ${styles[status]}`}>{status.toLowerCase()}</span>;
 }
 
-function ActionFeedback({ error, message }: EventActionState) {
-  if (error) return <p className="m-0 text-sm font-semibold text-destructive" role="alert">{error}</p>;
-  if (message) return <p className="m-0 text-sm font-semibold text-primary" role="status">{message}</p>;
-  return null;
-}
-
 function formatMonth(month: string) {
   const date = new Date(`${month}-01T00:00:00+08:00`);
-  return new Intl.DateTimeFormat("en-PH", { month: "long", year: "numeric", timeZone: "Asia/Manila" }).format(date);
+  return monthFormatter.format(date);
 }
 
 function shiftMonth(month: string, offset: number) {
   const [year, monthNumber] = month.split("-").map(Number);
   const date = new Date(Date.UTC(year!, monthNumber! - 1 + offset, 1));
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
-}
-
-function manilaDateKey(isoDate: string) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    day: "2-digit", month: "2-digit", timeZone: "Asia/Manila", year: "numeric",
-  }).formatToParts(new Date(isoDate));
-  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
-  return `${values.year}-${values.month}-${values.day}`;
 }

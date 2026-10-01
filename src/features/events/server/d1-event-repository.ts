@@ -2,7 +2,7 @@ import "server-only";
 
 import { AccessError } from "@/features/access/server";
 import type { D1BatchTransaction } from "@/features/access/server/d1-transaction-runner";
-import type { EventLifecycleStatus, EventRecord } from "../contracts";
+import type { EventLifecycleStatus, EventRecord, EventSummary } from "../contracts";
 import type { EventRepository } from "./events";
 
 interface EventRow {
@@ -41,13 +41,24 @@ const eventSelection = `
 export class D1EventRepository implements EventRepository {
   constructor(private readonly transaction: D1BatchTransaction) {}
 
-  async list(input: {
-    actorRoles: Array<{ role: string; universityId: string | null }>;
-    includeArchived: boolean;
-    upcomingOnly: boolean;
-    asOf: Date;
-    search: string;
-  }) {
+  async upcomingSummaries(asOf: Date): Promise<EventSummary[]> {
+    const rows = await this.transaction.all<{
+      id: string; title: string; category: string; starts_at: string; all_day: number; owner_name: string | null;
+    }>(
+      `SELECT e.id, e.title, e.category, e.starts_at, e.all_day, owner.name AS owner_name
+       FROM events AS e
+       LEFT JOIN member_universities AS owner ON owner.id = e.owner_university_id
+       WHERE e.status = 'PUBLISHED' AND e.ends_at >= ?
+       ORDER BY e.starts_at ASC, e.title ASC, e.id ASC LIMIT 4`,
+      asOf.toISOString(),
+    );
+    return rows.map((row) => ({
+      id: row.id, title: row.title, category: row.category, startsAt: row.starts_at,
+      allDay: row.all_day === 1, ownerUniversityName: row.owner_name ?? "Unyon Mindanao",
+    }));
+  }
+
+  async list(input: Parameters<EventRepository["list"]>[0]) {
     const isSuperAdmin = input.actorRoles.some(({ role }) => role === "SUPER_ADMIN");
     const managedUniversityIds = input.actorRoles.flatMap(({ role, universityId }) =>
       role === "UNIVERSITY_ADMIN" && universityId ? [universityId] : [],
@@ -70,6 +81,14 @@ export class D1EventRepository implements EventRepository {
       where.push("e.ends_at >= ?");
       values.push(input.asOf.toISOString());
     }
+    if (input.startsFrom) {
+      where.push("e.starts_at >= ?");
+      values.push(input.startsFrom.toISOString());
+    }
+    if (input.startsBefore) {
+      where.push("e.starts_at < ?");
+      values.push(input.startsBefore.toISOString());
+    }
     if (input.search) {
       where.push(
         `(instr(lower(e.title), lower(?)) > 0 OR
@@ -80,11 +99,16 @@ export class D1EventRepository implements EventRepository {
       values.push(input.search, input.search, input.search, input.search);
     }
 
+    const predicate = where.length ? `WHERE ${where.join(" AND ")}` : "";
+    const selection = input.limit === undefined ? `${eventSelection} ${predicate}` :
+      `WITH visible_events AS (
+        SELECT e.id FROM events AS e ${predicate}
+        ORDER BY e.starts_at ASC, e.title ASC, e.id ASC LIMIT ? OFFSET ?
+       ) ${eventSelection} WHERE e.id IN (SELECT id FROM visible_events)`;
     const rows = await this.transaction.all<EventRow>(
-      `${eventSelection}
-       ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
-       ORDER BY e.starts_at ASC, e.title ASC, co.name ASC`,
+      `${selection} ORDER BY e.starts_at ASC, e.title ASC, e.id ASC, co.name ASC`,
       ...values,
+      ...(input.limit === undefined ? [] : [input.limit, input.offset ?? 0]),
     );
     return groupEventRows(rows).map(({ row, coHosts }) => toEventRecord(row, coHosts));
   }

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
+import { collectionPage, paginationInput } from "@/shared/pagination";
 
 import {
   AccessError,
@@ -10,7 +11,7 @@ import {
   type SessionService,
   type TransactionRunner,
 } from "@/features/access/server";
-import type { EventRecord, EventUniversityChoice } from "../contracts";
+import type { EventRecord, EventSummary, EventUniversityChoice } from "../contracts";
 
 export type { EventRecord, EventUniversityChoice } from "../contracts";
 
@@ -23,12 +24,17 @@ interface EventSubject extends ResourceSubject {
 }
 
 export interface EventRepository {
+  upcomingSummaries(asOf: Date): Promise<EventSummary[]>;
   list(input: {
     actorRoles: Array<{ role: string; universityId: string | null }>;
     includeArchived: boolean;
     upcomingOnly: boolean;
     asOf: Date;
     search: string;
+    startsFrom?: Date;
+    startsBefore?: Date;
+    limit?: number;
+    offset?: number;
   }): Promise<EventRecord[]>;
   get(id: string): Promise<{ record: EventRecord; subject: EventSubject } | null>;
   activeUniversity(id: string): Promise<EventUniversityChoice | null>;
@@ -64,6 +70,8 @@ export interface EventCapabilities {
 
 type EventIntent =
   | "event.list"
+  | "event.upcoming_summaries"
+  | "event.workspace"
   | "event.read"
   | "event.university_choices"
   | "event.create"
@@ -107,6 +115,7 @@ const listInput = z.object({
   includeArchived: z.boolean().default(false),
   upcomingOnly: z.boolean().default(false),
   search: z.string().trim().max(120).default(""),
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/u).optional(),
 });
 const idInput = z.object({ id: z.string().uuid() });
 const transitionInput = idInput.extend({ version: z.number().int().positive() });
@@ -131,6 +140,8 @@ export function createEventFeature(dependencies: {
         includeArchived: input.includeArchived && hasRole(actor, "SUPER_ADMIN"),
         upcomingOnly: input.upcomingOnly,
         search: input.search,
+        ...(input.month ? monthBounds(input.month) : {}),
+        ...(input.month ? {} : { limit: 50 }),
       });
 
       return records.map((record) => ({
@@ -138,6 +149,38 @@ export function createEventFeature(dependencies: {
         canComplete: record.status === "PUBLISHED" && new Date(record.endsAt) <= transaction.occurredAt,
         manageable: canManage(actor, { ownerUniversityId: record.ownerUniversityId }),
       }));
+    },
+  });
+
+  const workspace = factory.query({
+    intent: "event.workspace",
+    input: listInput.extend({ ...paginationInput.shape, view: z.enum(["list", "calendar"]).default("list") }),
+    resolveSubject: async () => ({ id: "event-workspace", kind: "EventDirectory" }),
+    authorize: anyAppointment,
+    execute: async ({ actor, transaction }, input) => {
+      const canCreate = actor.appointments.some(({ role }) => role === "SUPER_ADMIN" || role === "UNIVERSITY_ADMIN");
+      const allowConfederation = hasRole(actor, "SUPER_ADMIN");
+      const calendar = input.view === "calendar";
+      if (calendar && !input.month) throw new AccessError("INVALID_INPUT", "Choose a calendar month");
+      const [records, universityChoices] = await Promise.all([
+        transaction.capabilities.events.list({
+          actorRoles: actor.appointments, asOf: transaction.occurredAt,
+          includeArchived: input.includeArchived && allowConfederation,
+          search: input.search, upcomingOnly: input.upcomingOnly,
+          ...(calendar ? monthBounds(input.month!) : { limit: input.pageSize + 1, offset: input.page * input.pageSize }),
+        }),
+        canCreate ? transaction.capabilities.events.listActiveUniversities() : Promise.resolve([]),
+      ]);
+      const page = calendar ? { records, page: 0, pageSize: records.length, hasNext: false } : collectionPage(records, input);
+      return {
+        events: page.records.map((record) => ({ ...record,
+          canComplete: record.status === "PUBLISHED" && new Date(record.endsAt) <= transaction.occurredAt,
+          manageable: canManage(actor, record),
+        })),
+        pagination: { page: page.page, pageSize: page.pageSize, hasNext: page.hasNext },
+        canCreate, allowConfederation, universityChoices,
+        ownerUniversityIds: actor.appointments.flatMap(({ role, universityId }) => role === "UNIVERSITY_ADMIN" && universityId ? [universityId] : []),
+      };
     },
   });
 
@@ -160,6 +203,14 @@ export function createEventFeature(dependencies: {
         manageable: canManage(actor, result.subject),
       };
     },
+  });
+
+  const upcomingSummaries = factory.query({
+    intent: "event.upcoming_summaries",
+    input: z.object({}),
+    resolveSubject: async () => ({ id: "upcoming-events", kind: "EventDirectory" }),
+    authorize: anyAppointment,
+    execute: ({ transaction }) => transaction.capabilities.events.upcomingSummaries(transaction.occurredAt),
   });
 
   const universityChoices = factory.query({
@@ -264,7 +315,7 @@ export function createEventFeature(dependencies: {
     });
   }
 
-  return { archive, cancel, complete, create, edit, get, list, publish, universityChoices };
+  return { archive, cancel, complete, create, edit, get, list, publish, universityChoices, upcomingSummaries, workspace };
 }
 
 function canRead(actor: PortalActor, subject: EventSubject) {
@@ -294,6 +345,19 @@ function normalizeText(value: string) {
 
 function emptyToNull(value: string) {
   return value.length ? value : null;
+}
+
+function monthBounds(month: string) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const start = new Date(0);
+  start.setUTCFullYear(year, monthNumber - 1, 1);
+  const next = new Date(start);
+  next.setUTCMonth(next.getUTCMonth() + 1);
+  const manilaOffset = 8 * 60 * 60 * 1000;
+  return {
+    startsFrom: new Date(start.getTime() - manilaOffset),
+    ...(next.getUTCFullYear() <= 9999 ? { startsBefore: new Date(next.getTime() - manilaOffset) } : {}),
+  };
 }
 
 function forbidden() {

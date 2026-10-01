@@ -4,7 +4,8 @@ import { notFound, redirect } from "next/navigation";
 
 import { AccessError, sessionCookieName } from "@/features/access/server";
 import { withEventFeature } from "@/features/events/server";
-import { EventControls, StatusPill } from "@/features/events/ui/event-workspace";
+import { EventControls } from "@/features/events/ui/event-forms";
+import { StatusPill } from "@/features/events/ui/event-workspace";
 import { formatEventRange } from "@/features/events/format";
 import { FileUpload, PrivateImage } from "@/features/private-files/ui/private-file-controls";
 import { EventDetailsForm } from "@/features/events/ui/event-details-form";
@@ -48,7 +49,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
           {event.contactPerson ? <div><dt className="text-xs font-extrabold tracking-[0.1em] text-primary uppercase">Contact</dt><dd className="mt-2 mb-0 text-sm font-semibold">{event.contactPerson}</dd></div> : null}
           <div><dt className="text-xs font-extrabold tracking-[0.1em] text-primary uppercase">Co-hosts</dt><dd className="mt-2 mb-0 text-sm font-semibold">{event.coHosts.length ? event.coHosts.map(({ name }) => name).join(", ") : "No co-hosts listed"}</dd></div>
         </dl>
-        {event.manageable ? <div className="mt-7 border-t border-primary/10 pt-6"><p className="mb-3 text-xs font-extrabold tracking-[0.12em] text-primary uppercase">Manage event</p><EventControls event={event} /></div> : null}
+        {event.manageable ? <div className="mt-7 border-t border-primary/10 pt-6"><p className="mb-3 text-xs font-extrabold tracking-[0.12em] text-primary uppercase">Manage event</p><EventControls event={{ id: event.id, version: event.version, status: event.status, canComplete: event.canComplete }} /></div> : null}
         {event.manageable && event.status !== "ARCHIVED" && <div className="mt-6"><h2 className="mb-3 font-semibold">Event cover</h2><FileUpload purpose="EVENT_COVER" resourceId={event.id} /></div>}
         {event.manageable && ["DRAFT", "PUBLISHED"].includes(event.status) && <EventDetailsForm key={`${event.id}-${event.version}`} event={event} />}
       </article>

@@ -27,12 +27,21 @@ interface ShortcutRow {
 export class D1CommunicationsRepository implements CommunicationsRepository {
   constructor(private readonly transaction: D1BatchTransaction) {}
 
-  async announcements(administrative: boolean) {
+  async recentAnnouncements() {
+    const rows = await this.transaction.all<{ id: string; title: string; excerpt: string }>(
+      `SELECT id, title, substr(body, 1, 220) AS excerpt FROM announcements
+       WHERE status = 'PUBLISHED' ORDER BY (published_at IS NULL) DESC, published_at DESC, id ASC LIMIT 3`,
+    );
+    return rows.map((row) => ({ ...row, excerpt: row.excerpt.slice(0, 220) }));
+  }
+
+  async announcements(administrative: boolean, selection = { limit: 50, offset: 0 }) {
     const rows = await this.transaction.all<AnnouncementRow>(
       `SELECT id, title, body, status, version, published_at
        FROM announcements
        ${administrative ? "" : "WHERE status = 'PUBLISHED'"}
-       ORDER BY (published_at IS NULL) DESC, published_at DESC, id ASC`,
+       ORDER BY (published_at IS NULL) DESC, published_at DESC, id ASC LIMIT ? OFFSET ?`,
+      selection.limit, selection.offset,
     );
     return rows.map(toAnnouncement);
   }
@@ -205,11 +214,20 @@ export class D1CommunicationsRepository implements CommunicationsRepository {
     };
   }
 
-  async reorder(ids: string[]) {
+  async reorder(ids: string[], expected: ShortcutRecord[]) {
     const now = this.transaction.occurredAt.toISOString();
     this.transaction.enqueueGuard(
       "SELECT COUNT(*) FROM shortcuts HAVING COUNT(*) = ?",
       ids.length,
+    );
+    this.transaction.enqueueGuard(
+      `SELECT COUNT(*) FROM shortcuts AS current JOIN json_each(?) AS captured
+         ON current.id = json_extract(captured.value, '$.id')
+       WHERE current.version = json_extract(captured.value, '$.version')
+         AND current.sort_order = json_extract(captured.value, '$.sortOrder')
+       HAVING COUNT(*) = ?`,
+      JSON.stringify(expected.map(({ id, version, sortOrder }) => ({ id, version, sortOrder }))),
+      expected.length,
     );
     this.transaction.enqueueCheckedMutationWithCount(
       `UPDATE shortcuts

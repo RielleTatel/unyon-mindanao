@@ -2,9 +2,9 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { AccessError, sessionCookieName, withSessionService } from "@/features/access/server";
+import { AccessError, sessionCookieName } from "@/features/access/server";
 import { withEventFeature } from "@/features/events/server";
-import type { EventUniversityChoice } from "@/features/events/server";
+import { manilaDateKey } from "@/features/events/format";
 import { EventWorkspace } from "@/features/events/ui/event-workspace";
 
 export const dynamic = "force-dynamic";
@@ -12,48 +12,25 @@ export const dynamic = "force-dynamic";
 export default async function EventsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string; view?: string }>;
+  searchParams: Promise<{ month?: string; view?: string; page?: string; pageSize?: string }>;
 }) {
   const token = (await cookies()).get(sessionCookieName)?.value ?? "";
-  let actor;
-
-  try {
-    actor = await withSessionService((sessions) => sessions.require(token, crypto.randomUUID()));
-  } catch {
-    redirect("/sign-in");
-  }
-
   const query = await searchParams;
   const view = query.view === "calendar" ? "calendar" : "list";
-  const dateParts = new Intl.DateTimeFormat("en-CA", {
-    month: "2-digit", timeZone: "Asia/Manila", year: "numeric",
-  }).formatToParts(new Date());
-  const dateValues = Object.fromEntries(dateParts.map(({ type, value }) => [type, value]));
-  const currentMonth = `${dateValues.year}-${dateValues.month}`;
+  const currentMonth = manilaDateKey(new Date().toISOString()).slice(0, 7);
   const month = /^\d{4}-(0[1-9]|1[0-2])$/u.test(query.month ?? "") ? query.month! : currentMonth;
-  const managesAnyEvent = actor.appointments.some(({ role }) => role === "SUPER_ADMIN" || role === "UNIVERSITY_ADMIN");
-  const ownerUniversityIds = actor.appointments
-    .filter(({ role, universityId }) => role === "UNIVERSITY_ADMIN" && universityId)
-    .map(({ universityId }) => universityId!);
-  let events;
-  let universityChoices: EventUniversityChoice[] = [];
+  let workspace;
 
   try {
-    events = await withEventFeature((feature) => feature.list({
+    workspace = await withEventFeature((feature) => feature.workspace({
       correlationId: crypto.randomUUID(),
-      input: { includeArchived: false, search: "", upcomingOnly: false },
+      input: { includeArchived: false, search: "", upcomingOnly: false, view, month,
+        page: Number(query.page ?? 0), pageSize: Number(query.pageSize ?? 50) },
       sessionToken: token,
     }));
-    if (managesAnyEvent) {
-      universityChoices = await withEventFeature((feature) => feature.universityChoices({
-        correlationId: crypto.randomUUID(),
-        input: {},
-        sessionToken: token,
-      }));
-    }
   } catch (error) {
     if (error instanceof AccessError && error.code === "AUTHENTICATION_REQUIRED") redirect("/sign-in");
-    if (error instanceof AccessError && error.code === "NOT_FOUND_OR_FORBIDDEN") notFound();
+    if (error instanceof AccessError && ["NOT_FOUND_OR_FORBIDDEN", "INVALID_INPUT"].includes(error.code)) notFound();
     throw error;
   }
 
@@ -71,12 +48,8 @@ export default async function EventsPage({
         </header>
 
         <EventWorkspace
-          allowConfederation={actor.appointments.some(({ role }) => role === "SUPER_ADMIN")}
-          canCreate={managesAnyEvent}
-          events={events}
+          {...workspace}
           month={month}
-          ownerUniversityIds={ownerUniversityIds}
-          universityChoices={universityChoices}
           view={view}
         />
       </div>

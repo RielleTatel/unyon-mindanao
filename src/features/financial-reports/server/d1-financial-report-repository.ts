@@ -20,23 +20,35 @@ interface ReportRow {
 export class D1FinancialReportRepository implements FinancialReportRepository {
   constructor(private readonly transaction: D1BatchTransaction) {}
 
-  async list(administrative: boolean) {
+  async list(administrative: boolean, selection = { limit: 50, offset: 0 }) {
     const rows = await this.transaction.all<ReportRow>(
-      `SELECT r.id, r.title, r.reporting_period, r.description,
+      `WITH visible_reports AS (
+         SELECT r.id FROM financial_reports AS r
+         ${administrative ? "" : "WHERE EXISTS (SELECT 1 FROM financial_report_revisions AS current WHERE current.report_id = r.id AND current.status = 'PUBLISHED')"}
+         ORDER BY r.created_at DESC, r.id ASC LIMIT ? OFFSET ?
+       ) SELECT r.id, r.title, r.reporting_period, r.description,
               rev.id AS revision_id, rev.revision, rev.status,
               rev.object_id, rev.published_at
        FROM financial_reports AS r
        LEFT JOIN financial_report_revisions AS rev
          ON rev.report_id = r.id
         ${administrative ? "" : "AND rev.status <> 'DRAFT'"}
-       ${administrative ? "" : "WHERE EXISTS (SELECT 1 FROM financial_report_revisions AS current WHERE current.report_id = r.id AND current.status = 'PUBLISHED')"}
+       WHERE r.id IN (SELECT id FROM visible_reports)
        ORDER BY r.created_at DESC, r.id ASC, rev.revision DESC`,
+      selection.limit, selection.offset,
     );
     return groupReports(rows);
   }
 
   async get(id: string) {
-    return (await this.list(true)).find((report) => report.id === id) ?? null;
+    const rows = await this.transaction.all<ReportRow>(
+      `SELECT r.id, r.title, r.reporting_period, r.description,
+              rev.id AS revision_id, rev.revision, rev.status, rev.object_id, rev.published_at
+       FROM financial_reports AS r LEFT JOIN financial_report_revisions AS rev ON rev.report_id = r.id
+       WHERE r.id = ? ORDER BY rev.revision DESC`,
+      id,
+    );
+    return groupReports(rows)[0] ?? null;
   }
 
   async create(input: Parameters<FinancialReportRepository["create"]>[0]) {

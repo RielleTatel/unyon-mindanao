@@ -17,6 +17,7 @@ vi.mock("@/features/access/client/firebase-auth", () => ({
 }));
 
 import { SignOutButton } from "@/features/access/ui/sign-out-button";
+import * as identityLoader from "@/features/access/client/load-portal-identity";
 
 describe("SignOutButton", () => {
   beforeEach(() => {
@@ -33,6 +34,7 @@ describe("SignOutButton", () => {
     );
 
     render(<SignOutButton />);
+    expect(signOutPortalIdentity).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
 
     await waitFor(() => expect(push).toHaveBeenCalledWith("/sign-in"));
@@ -56,5 +58,36 @@ describe("SignOutButton", () => {
     );
     expect(signOutPortalIdentity).toHaveBeenCalledOnce();
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it("allows retry when the identity action fails after the portal session is revoked", async () => {
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockImplementation(async (_url, init) =>
+      new Response(JSON.stringify(init?.method === "DELETE" ? { ok: true } : { token: "csrf-token" })),
+    ));
+    signOutPortalIdentity.mockRejectedValueOnce(new Error("Identity unavailable"));
+    render(<SignOutButton />);
+    await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Please try again");
+    expect(push).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/sign-in"));
+    expect(signOutPortalIdentity).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports a failed identity import and completes sign-out after loading recovers", async () => {
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockImplementation(async (_url, init) =>
+      new Response(JSON.stringify(init?.method === "DELETE" ? { ok: true } : { token: "csrf-token" })),
+    ));
+    const load = vi.spyOn(identityLoader, "loadPortalIdentity").mockRejectedValueOnce(new TypeError("Identity module unavailable"));
+    try {
+      render(<SignOutButton />);
+      await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent("Please try again");
+      expect(signOutPortalIdentity).not.toHaveBeenCalled();
+      expect(push).not.toHaveBeenCalled();
+      await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
+      await waitFor(() => expect(push).toHaveBeenCalledWith("/sign-in"));
+      expect(signOutPortalIdentity).toHaveBeenCalledOnce();
+    } finally { load.mockRestore(); }
   });
 });

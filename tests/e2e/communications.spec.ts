@@ -29,7 +29,7 @@ test("Super Admin publishes and archives an Announcement and manages an external
   await createShortcut.getByLabel("Label", { exact: true }).fill(title);
   await createShortcut.getByLabel("External URL").fill("https://example.org/resources");
   await createShortcut.getByRole("button", { name: "Save Shortcut" }).click();
-  const link = page.getByRole("link", { name: new RegExp(title) });
+  const link = page.getByRole("link", { name: new RegExp(`^${title} ↗`) });
   await expect(link).toHaveAttribute("target", "_blank");
   await expect(link).toHaveAttribute("rel", "noopener noreferrer");
   await expect(link).toContainText("External link");
@@ -38,4 +38,17 @@ test("Super Admin publishes and archives an Announcement and manages an external
   await item.getByLabel("Active", { exact: true }).uncheck();
   await item.getByRole("button", { name: "Save Shortcut" }).click();
   await expect(item.getByText("Inactive", { exact: true })).toBeVisible();
+
+  const nextTitle = `${title} follow-up`;
+  await createShortcut.getByLabel("Label", { exact: true }).fill(nextTitle);
+  await createShortcut.getByLabel("External URL").fill("https://example.org/order-check");
+  await createShortcut.getByRole("button", { name: "Save Shortcut" }).click();
+  const nextItem = page.getByRole("main").getByRole("listitem").filter({ has: page.getByRole("link", { name: new RegExp(`^${nextTitle} ↗`) }) });
+  await expect(nextItem).toBeVisible();
+  await expect(nextItem.getByRole("button", { name: "Move down" })).toBeDisabled();
+  await nextItem.getByRole("button", { name: "Move up" }).click();
+  await expect(nextItem.getByRole("status")).toContainText("Changes saved.");
+  const rows = page.getByRole("main").getByRole("listitem");
+  await expect(rows.nth((await rows.count()) - 2)).toContainText(nextTitle);
+  await expect(rows.last()).toContainText(title);
 });

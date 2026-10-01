@@ -5,14 +5,20 @@ import type { FinancialReportRepository } from "./reports";
 
 export class PrismaFinancialReportRepository implements FinancialReportRepository {
   constructor(private readonly transaction: Prisma.TransactionClient) {}
-  async list(administrative: boolean) {
+  async list(administrative: boolean, selection = { limit: 50, offset: 0 }) {
     const rows = await this.transaction.financialReport.findMany({
-      where: administrative ? {} : { revisions: { some: { status: "PUBLISHED" } } }, orderBy: { createdAt: "desc" },
+      where: administrative ? {} : { revisions: { some: { status: "PUBLISHED" } } }, orderBy: [{ createdAt: "desc" }, { id: "asc" }], take: selection.limit, skip: selection.offset,
       select: { id: true, title: true, reportingPeriod: true, description: true, revisions: { where: administrative ? {} : { status: { not: "DRAFT" } }, orderBy: { revision: "desc" }, select: { id: true, revision: true, status: true, objectId: true, publishedAt: true } } },
     });
     return rows.map((row) => ({ ...row, revisions: row.revisions.map((revision) => ({ ...revision, publishedAt: revision.publishedAt?.toISOString() ?? null })) }));
   }
-  async get(id: string) { return (await this.list(true)).find((report) => report.id === id) ?? null; }
+  async get(id: string) {
+    const row = await this.transaction.financialReport.findUnique({
+      where: { id },
+      select: { id: true, title: true, reportingPeriod: true, description: true, revisions: { orderBy: { revision: "desc" }, select: { id: true, revision: true, status: true, objectId: true, publishedAt: true } } },
+    });
+    return row ? { ...row, revisions: row.revisions.map((revision) => ({ ...revision, publishedAt: revision.publishedAt?.toISOString() ?? null })) } : null;
+  }
   async create(input: Parameters<FinancialReportRepository["create"]>[0]) { await this.transaction.financialReport.create({ data: { ...input, revisions: { create: { revision: 1 } } } }); }
   async revise(id: string) {
     await this.transaction.$queryRaw`SELECT id FROM financial_reports WHERE id = ${id}::uuid FOR UPDATE`;

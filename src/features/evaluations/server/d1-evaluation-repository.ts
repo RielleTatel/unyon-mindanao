@@ -2,7 +2,7 @@ import "server-only";
 
 import { AccessError } from "@/features/access/server";
 import type { D1BatchTransaction } from "@/features/access/server/d1-transaction-runner";
-import type { EvaluationAnswer, EvaluationQuestion, EvaluationResults } from "../contracts";
+import type { EvaluationAnswer, EvaluationQuestion, EvaluationResults, EvaluationSummary } from "../contracts";
 import type { EvaluationRepository, EvaluationSubject } from "./evaluations";
 
 interface EvaluationRow {
@@ -20,6 +20,13 @@ interface EvaluationRow {
   questions: string;
 }
 
+const subjectSelection = `SELECT e.id, 'EventEvaluation' AS kind, e.title, e.status,
+  e.owner_university_id, e.ends_at, w.opens_at, w.closes_at,
+  w.closed, w.version, t.version AS template_version, t.questions
+  FROM event_evaluation_windows AS w
+  JOIN events AS e ON e.id = w.event_id
+  JOIN evaluation_template_versions AS t ON t.id = w.template_id`;
+
 export class D1EvaluationRepository implements EvaluationRepository {
   private readonly responseCache = new Map<
     string,
@@ -28,21 +35,44 @@ export class D1EvaluationRepository implements EvaluationRepository {
 
   constructor(private readonly transaction: D1BatchTransaction) {}
 
-  async list() {
-    const rows = await this.transaction.all<EvaluationRow>(
+  async list(userId: string, input: Parameters<EvaluationRepository["list"]>[1]) {
+    const isSuperAdmin = input.actorRoles.some(({ role }) => role === "SUPER_ADMIN");
+    const managedIds = input.actorRoles.flatMap(({ role, universityId }) => role === "UNIVERSITY_ADMIN" && universityId ? [universityId] : []);
+    const predicate = isSuperAdmin ? "" : `WHERE (e.status IN ('PUBLISHED', 'COMPLETED')${managedIds.length ? ` OR e.owner_university_id IN (${managedIds.map(() => "?").join(",")})` : ""})`;
+    const rows = await this.transaction.all<EvaluationRow & { eligible: number }>(
       `SELECT e.id, 'EventEvaluation' AS kind, e.title, e.status,
               e.owner_university_id, e.ends_at, w.opens_at, w.closes_at,
-              w.closed, w.version, t.version AS template_version, t.questions
+              w.closed, w.version, t.version AS template_version, t.questions,
+              EXISTS (SELECT 1 FROM appointments AS a WHERE a.portal_user_id = ?
+                AND a.starts_at <= e.ends_at AND (a.ends_at IS NULL OR a.ends_at > e.ends_at)) AS eligible
        FROM event_evaluation_windows AS w
        JOIN events AS e ON e.id = w.event_id
        JOIN evaluation_template_versions AS t ON t.id = w.template_id
-       ORDER BY w.opens_at DESC`,
+       ${predicate} ORDER BY w.opens_at DESC, e.id ASC LIMIT ? OFFSET ?`,
+      userId, ...(isSuperAdmin ? [] : managedIds), input.limit ?? 50, input.offset ?? 0,
     );
-    return rows.map(toSubject);
+    this.responseCache.set(userId, Promise.resolve(await this.responsesForUser(userId, rows.map(({ id }) => id))));
+    return rows.map((row) => ({ ...toSubject(row), eligible: row.eligible === 1 }));
   }
 
   async get(id: string) {
-    return (await this.list()).find((record) => record.id === id) ?? null;
+    const row = await this.transaction.first<EvaluationRow>(`${subjectSelection} WHERE e.id = ?`, id);
+    return row ? toSubject(row) : null;
+  }
+
+  async openSummaries(userId: string, now: Date): Promise<EvaluationSummary[]> {
+    const rows = await this.transaction.all<{ event_id: string; title: string; closes_at: string; submitted: number }>(
+      `SELECT e.id AS event_id, e.title, w.closes_at, (r.id IS NOT NULL) AS submitted
+       FROM event_evaluation_windows AS w JOIN events AS e ON e.id = w.event_id
+       LEFT JOIN evaluation_responses AS r ON r.event_id = e.id AND r.portal_user_id = ?
+       WHERE w.closed = 0 AND e.status IN ('PUBLISHED', 'COMPLETED')
+         AND w.opens_at <= ? AND w.closes_at > ?
+         AND EXISTS (SELECT 1 FROM appointments AS a WHERE a.portal_user_id = ?
+           AND a.starts_at <= e.ends_at AND (a.ends_at IS NULL OR a.ends_at > e.ends_at))
+       ORDER BY w.opens_at DESC, e.id ASC`,
+      userId, now.toISOString(), now.toISOString(), userId,
+    );
+    return rows.map((row) => ({ eventId: row.event_id, title: row.title, closesAt: row.closes_at, submitted: row.submitted === 1 }));
   }
 
   async eligible(userId: string, at: Date) {
@@ -264,7 +294,8 @@ export class D1EvaluationRepository implements EvaluationRepository {
     return count;
   }
 
-  private async responsesForUser(userId: string) {
+  private async responsesForUser(userId: string, eventIds?: string[]) {
+    if (eventIds?.length === 0) return new Map<string, { version: number; answers: EvaluationAnswer[] }>();
     const rows = await this.transaction.all<{
       event_id: string;
       version: number;
@@ -275,8 +306,10 @@ export class D1EvaluationRepository implements EvaluationRepository {
       `SELECT r.event_id, r.version, a.position, a.rating, a.comment
        FROM evaluation_responses AS r
        LEFT JOIN evaluation_answers AS a ON a.response_id = r.id
-       WHERE r.portal_user_id = ? ORDER BY r.event_id, a.position`,
+       WHERE r.portal_user_id = ? ${eventIds ? "AND r.event_id IN (SELECT value FROM json_each(?))" : ""}
+       ORDER BY r.event_id, a.position`,
       userId,
+      ...(eventIds ? [JSON.stringify(eventIds)] : []),
     );
     const results = new Map<string, { version: number; answers: EvaluationAnswer[] }>();
     for (const row of rows) {

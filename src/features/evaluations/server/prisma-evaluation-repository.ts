@@ -1,17 +1,40 @@
 import "server-only";
 import type { Prisma } from "#unyon-prisma-client";
 import { AccessError } from "@/features/access/server";
-import type { EvaluationAnswer, EvaluationQuestion, EvaluationResults } from "../contracts";
+import type { EvaluationAnswer, EvaluationQuestion, EvaluationResults, EvaluationSummary } from "../contracts";
 import type { EvaluationRepository, EvaluationSubject } from "./evaluations";
 
 export class PrismaEvaluationRepository implements EvaluationRepository {
   private appointmentCache = new Map<string, Promise<{ startsAt: Date; endsAt: Date | null }[]>>();
   private responseCache = new Map<string, Promise<Map<string, NonNullable<Awaited<ReturnType<EvaluationRepository["response"]>>>>>>();
   constructor(private readonly transaction: Prisma.TransactionClient) {}
-  async list() {
-    return this.transaction.$queryRaw<EvaluationSubject[]>`SELECT e.id, 'EventEvaluation' AS kind, e.title, e.status, e.owner_university_id AS "ownerUniversityId", e.ends_at AS "endsAt", w.opens_at AS "opensAt", w.closes_at AS "closesAt", w.closed, w.version, t.version AS "templateVersion", t.questions FROM event_evaluation_windows w JOIN events e ON e.id = w.event_id JOIN evaluation_template_versions t ON t.id = w.template_id ORDER BY w.opens_at DESC`;
+  async list(userId: string, input: Parameters<EvaluationRepository["list"]>[1]) {
+    const isSuperAdmin = input.actorRoles.some(({ role }) => role === "SUPER_ADMIN");
+    const rows = await this.transaction.$queryRaw<(EvaluationSubject & { eligible: boolean })[]>`SELECT e.id, 'EventEvaluation' AS kind, e.title, e.status, e.owner_university_id AS "ownerUniversityId", e.ends_at AS "endsAt", w.opens_at AS "opensAt", w.closes_at AS "closesAt", w.closed, w.version, t.version AS "templateVersion", t.questions,
+      EXISTS (SELECT 1 FROM appointments a WHERE a.portal_user_id = ${userId}::uuid AND a.starts_at <= e.ends_at AND (a.ends_at IS NULL OR a.ends_at > e.ends_at)) AS eligible
+      FROM event_evaluation_windows w JOIN events e ON e.id = w.event_id JOIN evaluation_template_versions t ON t.id = w.template_id
+      WHERE ${isSuperAdmin} OR e.status IN ('PUBLISHED', 'COMPLETED') OR e.owner_university_id IN (
+        SELECT (captured->>'universityId')::uuid FROM jsonb_array_elements(${JSON.stringify(input.actorRoles)}::jsonb) captured
+        WHERE captured->>'role' = 'UNIVERSITY_ADMIN' AND captured->>'universityId' IS NOT NULL
+      ) ORDER BY w.opens_at DESC, e.id ASC LIMIT ${input.limit ?? 50} OFFSET ${input.offset ?? 0}`;
+    const responses = rows.length ? await this.transaction.evaluationResponse.findMany({ where: { portalUserId: userId, eventId: { in: rows.map(({ id }) => id) } }, select: { eventId: true, version: true, answers: { orderBy: { position: "asc" }, select: { position: true, rating: true, comment: true } } } }) : [];
+    this.responseCache.set(userId, Promise.resolve(new Map(responses.map(({ eventId, ...response }) => [eventId, response]))));
+    return rows;
   }
-  async get(id: string) { return (await this.list()).find((record) => record.id === id) ?? null; }
+  async get(id: string) {
+    const [row] = await this.transaction.$queryRaw<EvaluationSubject[]>`SELECT e.id, 'EventEvaluation' AS kind, e.title, e.status, e.owner_university_id AS "ownerUniversityId", e.ends_at AS "endsAt", w.opens_at AS "opensAt", w.closes_at AS "closesAt", w.closed, w.version, t.version AS "templateVersion", t.questions FROM event_evaluation_windows w JOIN events e ON e.id = w.event_id JOIN evaluation_template_versions t ON t.id = w.template_id WHERE e.id = ${id}::uuid`;
+    return row ?? null;
+  }
+  async openSummaries(userId: string, now: Date): Promise<EvaluationSummary[]> {
+    const rows = await this.transaction.$queryRaw<{ eventId: string; title: string; closesAt: Date; submitted: boolean }[]>`
+      SELECT e.id AS "eventId", e.title, w.closes_at AS "closesAt", (r.id IS NOT NULL) AS submitted
+      FROM event_evaluation_windows w JOIN events e ON e.id = w.event_id
+      LEFT JOIN evaluation_responses r ON r.event_id = e.id AND r.portal_user_id = ${userId}::uuid
+      WHERE NOT w.closed AND e.status IN ('PUBLISHED', 'COMPLETED') AND w.opens_at <= ${now} AND w.closes_at > ${now}
+        AND EXISTS (SELECT 1 FROM appointments a WHERE a.portal_user_id = ${userId}::uuid AND a.starts_at <= e.ends_at AND (a.ends_at IS NULL OR a.ends_at > e.ends_at))
+      ORDER BY w.opens_at DESC, e.id ASC`;
+    return rows.map(({ closesAt, ...row }) => ({ ...row, closesAt: closesAt.toISOString() }));
+  }
   async eligible(userId: string, at: Date) {
     if (!this.appointmentCache.has(userId)) this.appointmentCache.set(userId, this.transaction.appointment.findMany({ where: { portalUserId: userId }, select: { startsAt: true, endsAt: true } }));
     return (await this.appointmentCache.get(userId)!).some(({ startsAt, endsAt }) => startsAt <= at && (!endsAt || endsAt > at));
@@ -62,9 +85,14 @@ export class PrismaEvaluationRepository implements EvaluationRepository {
     });
     const comments = rows.flatMap((row) => row.answers.flatMap((answer) => answer.comment ? [{ position: answer.position, comment: answer.comment }] : [])).sort((a, b) => a.position - b.position || a.comment.localeCompare(b.comment));
     const responses = [];
-    if (attributable) for (const row of rows) {
-      const user = await this.transaction.portalUser.findUniqueOrThrow({ where: { id: row.portalUserId }, select: { fullName: true, email: true } });
-      responses.push({ ...user, answers: row.answers });
+    if (attributable && rows.length) {
+      const users = await this.transaction.portalUser.findMany({ where: { id: { in: rows.map(({ portalUserId }) => portalUserId) } }, select: { id: true, fullName: true, email: true } });
+      const respondents = new Map(users.map(({ id, ...user }) => [id, user]));
+      for (const row of rows) {
+        const user = respondents.get(row.portalUserId);
+        if (!user) throw new Error("Evaluation respondent unavailable");
+        responses.push({ ...user, answers: row.answers });
+      }
     }
     return { disclosure: attributable ? "ATTRIBUTABLE" : "ANONYMOUS", count: rows.length, questions, ratings, comments, responses };
   }

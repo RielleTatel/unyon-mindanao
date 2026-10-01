@@ -55,6 +55,7 @@ function createFeature(role: "SUPER_ADMIN" | "UNIVERSITY_ADMIN" | "REPRESENTATIV
   let current = record();
   const audit: AuditRecord[] = [];
   const repository: EventRepository = {
+    upcomingSummaries: vi.fn(async () => []),
     editDetails: vi.fn(async () => current),
     list: vi.fn(async () => [current]),
     get: vi.fn(async (id) => id === current.id ? {

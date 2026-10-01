@@ -10,13 +10,19 @@ type Transaction = Prisma.TransactionClient;
 export class PrismaEventRepository implements EventRepository {
   constructor(private readonly transaction: Transaction) {}
 
-  async list(input: {
-    actorRoles: Array<{ role: string; universityId: string | null }>;
-    includeArchived: boolean;
-    upcomingOnly: boolean;
-    asOf: Date;
-    search: string;
-  }) {
+  async upcomingSummaries(asOf: Date) {
+    const rows = await this.transaction.event.findMany({
+      where: { status: "PUBLISHED", endsAt: { gte: asOf } },
+      select: { id: true, title: true, category: true, startsAt: true, allDay: true, ownerUniversity: { select: { name: true } } },
+      orderBy: [{ startsAt: "asc" }, { title: "asc" }, { id: "asc" }],
+      take: 4,
+    });
+    return rows.map(({ ownerUniversity, startsAt, ...row }) => ({
+      ...row, startsAt: startsAt.toISOString(), ownerUniversityName: ownerUniversity?.name ?? "Unyon Mindanao",
+    }));
+  }
+
+  async list(input: Parameters<EventRepository["list"]>[0]) {
     const isSuperAdmin = input.actorRoles.some(({ role }) => role === "SUPER_ADMIN");
     const managedUniversityIds = input.actorRoles
       .filter(({ role, universityId }) => role === "UNIVERSITY_ADMIN" && universityId)
@@ -44,12 +50,15 @@ export class PrismaEventRepository implements EventRepository {
         coHosts: { include: { university: { select: { id: true, name: true } } } },
         ownerUniversity: { select: { name: true } },
       },
-      orderBy: [{ startsAt: "asc" }, { title: "asc" }],
+      orderBy: [{ startsAt: "asc" }, { title: "asc" }, { id: "asc" }],
+      take: input.limit,
+      skip: input.offset,
       where: {
         AND: [
           privateVisibility,
           search,
           ...(input.upcomingOnly ? [{ endsAt: { gte: input.asOf } }] : []),
+          ...(input.startsFrom || input.startsBefore ? [{ startsAt: { gte: input.startsFrom, lt: input.startsBefore } }] : []),
         ],
         ...(input.includeArchived ? {} : { status: { not: "ARCHIVED" as const } }),
       },

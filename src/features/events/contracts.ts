@@ -31,3 +31,5 @@ export interface EventUniversityChoice {
   id: string;
   name: string;
 }
+
+export type EventSummary = Pick<EventRecord, "id" | "title" | "category" | "startsAt" | "allDay" | "ownerUniversityName">;

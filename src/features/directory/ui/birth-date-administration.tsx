@@ -1,8 +1,8 @@
 "use client";
+import { loadPortalIdentity } from "@/features/access/client/load-portal-identity";
 
 import { useState, type FormEvent } from "react";
 import { birthdayAction } from "@/app/portal/birthdays/actions";
-import { signInWithPortalIdentity } from "@/features/access/client/firebase-auth";
 import type { BirthDateSubject, RestrictedBirthDate } from "../contracts";
 import { Button } from "@/shared/ui/button";
 
@@ -22,6 +22,7 @@ export function BirthDateAdministration({ people, actorEmail, canApplyRetention 
     const action = (event.nativeEvent as SubmitEvent).submitter?.getAttribute("value") as "read" | "update" | "retention";
     setPending(true); setError(""); setMessage("");
     try {
+      const { signInWithPortalIdentity } = await loadPortalIdentity();
       const idToken = await signInWithPortalIdentity(actorEmail, String(data.get("password") ?? ""));
       const result = await birthdayAction({ action, id: selected, idToken, version: record?.version, birthDate: String(data.get("birthDate") ?? "") || null });
       if (result.error) { setRecord(null); setError(result.error); }

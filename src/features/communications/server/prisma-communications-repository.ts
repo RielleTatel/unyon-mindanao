@@ -10,8 +10,14 @@ const toAnnouncement = (row: Prisma.AnnouncementGetPayload<{ select: typeof anno
 
 export class PrismaCommunicationsRepository implements CommunicationsRepository {
   constructor(private readonly transaction: Prisma.TransactionClient) {}
-  async announcements(administrative: boolean) {
-    return (await this.transaction.announcement.findMany({ where: administrative ? {} : { status: "PUBLISHED" }, select: announcementSelect, orderBy: [{ publishedAt: "desc" }, { id: "asc" }] })).map(toAnnouncement);
+  async recentAnnouncements() {
+    const rows = await this.transaction.$queryRaw<{ id: string; title: string; excerpt: string }[]>`
+      SELECT id, title, substring(body, 1, 220) AS excerpt FROM announcements
+      WHERE status = 'PUBLISHED' ORDER BY published_at DESC NULLS FIRST, id ASC LIMIT 3`;
+    return rows.map((row) => ({ ...row, excerpt: row.excerpt.slice(0, 220) }));
+  }
+  async announcements(administrative: boolean, selection = { limit: 50, offset: 0 }) {
+    return (await this.transaction.announcement.findMany({ where: administrative ? {} : { status: "PUBLISHED" }, select: announcementSelect, orderBy: [{ publishedAt: "desc" }, { id: "asc" }], take: selection.limit, skip: selection.offset })).map(toAnnouncement);
   }
   async announcement(id: string) {
     const row = await this.transaction.announcement.findUnique({ where: { id }, select: announcementSelect });
@@ -42,7 +48,14 @@ export class PrismaCommunicationsRepository implements CommunicationsRepository 
     if (changed.count !== 1) throw new AccessError("CONFLICT", "Shortcut changed");
     return (await this.shortcut(id))!;
   }
-  async reorder(ids: string[]) {
-    for (const [sortOrder, id] of ids.entries()) await this.transaction.shortcut.update({ where: { id }, data: { sortOrder, version: { increment: 1 } } });
+  async reorder(ids: string[], expected: Awaited<ReturnType<CommunicationsRepository["shortcuts"]>>) {
+    if (await this.transaction.shortcut.count() !== expected.length) throw new AccessError("CONFLICT", "Shortcut list changed");
+    const captured = new Map(expected.map((record) => [record.id, record]));
+    for (const [sortOrder, id] of ids.entries()) {
+      const record = captured.get(id);
+      if (!record) throw new AccessError("CONFLICT", "Shortcut list changed");
+      const changed = await this.transaction.shortcut.updateMany({ where: { id, version: record.version, sortOrder: record.sortOrder }, data: { sortOrder, version: { increment: 1 } } });
+      if (changed.count !== 1) throw new AccessError("CONFLICT", "Shortcut list changed");
+    }
   }
 }

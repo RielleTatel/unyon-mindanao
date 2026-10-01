@@ -6,4 +6,4 @@ export {
   type EventCapabilities,
   type EventRepository,
 } from "./events";
-export type { EventRecord, EventUniversityChoice, EventLifecycleStatus } from "../contracts";
+export type { EventRecord, EventSummary, EventUniversityChoice, EventLifecycleStatus } from "../contracts";

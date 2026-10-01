@@ -1,0 +1,2 @@
+export function Revision({ record }: { record?: { id: string; version: number } }) { return record ? <><input type="hidden" name="id" value={record.id} /><input type="hidden" name="version" value={record.version} /></> : null; }
+export function Feedback({ state }: { state: { error: string | null; message: string | null } }) { return <>{state.error ? <p className="m-0 text-sm text-destructive" role="alert">{state.error}</p> : null}{state.message ? <p className="m-0 text-sm text-primary" role="status">{state.message}</p> : null}</>; }

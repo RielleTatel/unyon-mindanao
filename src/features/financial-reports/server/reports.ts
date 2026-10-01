@@ -1,10 +1,11 @@
 import "server-only";
 import { z } from "zod";
+import { collectionPage, paginationInput, type PageSelection } from "@/shared/pagination";
 import { createProtectedOperationFactory, retryDatabaseTransactions, type SessionService, type TransactionRunner } from "@/features/access/server";
 import type { FinancialReportRecord } from "../contracts";
 
 export interface FinancialReportRepository {
-  list(administrative: boolean): Promise<FinancialReportRecord[]>;
+  list(administrative: boolean, selection?: PageSelection): Promise<FinancialReportRecord[]>;
   get(id: string): Promise<FinancialReportRecord | null>;
   create(input: { id: string; title: string; reportingPeriod: string; description: string }): Promise<void>;
   revise(id: string): Promise<void>;
@@ -15,6 +16,12 @@ export function createFinancialReportFeature(dependencies: { sessions: Pick<Sess
   const factory = createProtectedOperationFactory({ ...dependencies, transactions: retryDatabaseTransactions(dependencies.transactions) });
   const isAdmin = ({ actor }: { actor: { appointments: { role: string }[] } }) => actor.appointments.some(({ role }) => role === "SUPER_ADMIN");
   return {
+    page: factory.query({ intent: "financial-report.page", input: paginationInput, resolveSubject: async () => ({ id: "reports", kind: "FinancialReportDirectory" }), authorize: () => true,
+      execute: async ({ actor, transaction }, input) => ({
+        ...collectionPage(await transaction.capabilities.reports.list(isAdmin({ actor }), { limit: input.pageSize + 1, offset: input.page * input.pageSize }), input),
+        canManage: isAdmin({ actor }),
+      }),
+    }),
     list: factory.query({ intent: "financial-report.list", input: z.object({}), resolveSubject: async () => ({ id: "reports", kind: "FinancialReportDirectory" }), authorize: () => true,
       execute: ({ actor, transaction }) => transaction.capabilities.reports.list(isAdmin({ actor })),
     }),
