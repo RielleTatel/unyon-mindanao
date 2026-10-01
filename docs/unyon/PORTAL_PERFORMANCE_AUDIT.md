@@ -5,6 +5,7 @@
 - Historical reference: `0c4293f` (`cd45980^`), before the D1 persistence and portal refresh.
 - Deliverable: measured findings and an [implementation specification](./PORTAL_OPTIMIZATION_SPEC.md).
 - Implementation ticket: [GitHub issue #18](https://github.com/RielleTatel/unyon-mindanao/issues/18), labeled `ready-for-agent` and attached to the project map.
+- Applied implementation and verification: [Optimization Results](./PORTAL_OPTIMIZATION_RESULTS.md), recorded on 2026-10-01.
 - Measurements use synthetic fixtures and local build artifacts. No production records or credentials are included.
 
 ## Findings

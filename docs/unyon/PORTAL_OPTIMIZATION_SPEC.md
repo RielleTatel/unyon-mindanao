@@ -131,6 +131,8 @@ Use synthetic capacity fixtures and the existing feature interfaces and local Wo
 
 ## Further Notes
 
+The local implementation, measured outcomes, and verification record are documented in [Portal Optimization Results](./PORTAL_OPTIMIZATION_RESULTS.md).
+
 The local audit measured the current calendar preparation at approximately 1.1 seconds for 1,000 Events; an equivalent one-pass experiment took approximately 2.2 ms. Evaluation listing performed 104 reads for 100 open windows. The dashboard replay performed 117 reads and four batches, and fetched 1,000 Events and 1,000 Announcements before selecting seven displayed summaries. These are synthetic local observations, not production latency measurements.
 
 This work supports the existing [Event publication](https://github.com/RielleTatel/unyon-mindanao/issues/11), [Event calendar](https://github.com/RielleTatel/unyon-mindanao/issues/12), [dashboard](https://github.com/RielleTatel/unyon-mindanao/issues/15), and [pilot release verification](https://github.com/RielleTatel/unyon-mindanao/issues/17) requirements.
