@@ -35,3 +35,7 @@ docs/unyon/.obsidian/workspace.json
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# local project working notes
+/docs/unyon/*
+!/docs/unyon/SRS.md

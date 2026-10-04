@@ -6,13 +6,13 @@ This repository implements the Unyon Mindanao Portal. Consult the authoritative 
 
 - `CONTEXT.md` defines canonical domain language. Read it before naming models, roles, or workflows.
 - `docs/unyon/SRS.md` defines MVP behavior and acceptance criteria.
-- `docs/unyon/IMPLEMENTATION_PLAN.md` defines module seams, planned layout, phases, and verification.
 - `docs/adr/` records hard-to-reverse technology and architecture decisions. Read the relevant ADR before changing authentication, hosting, persistence, or storage.
+- `README.md` contains setup, runtime, and verification commands.
 - `branding/` contains visual references; the evergreen/olive/gold identity is enduring, while “Year 5” campaign copy is not assumed permanent.
 
 ## Project Structure
 
-The repository is documentation-first. The application will use a feature-based layout:
+The application uses a feature-based layout:
 
 - `src/app/` — thin Next.js route adapters and layouts.
 - `src/features/` — access, directory, events, evaluations, communications, financial reports, private files, and dashboard modules.
@@ -29,7 +29,7 @@ Treat `package.json` scripts as canonical. Start locally with `pnpm dev`; use `p
 
 ## Coding and Architecture Conventions
 
-Use strict TypeScript, two-space indentation, `PascalCase` for React modules/types, `camelCase` for functions, and kebab-case feature directories. Keep routes thin and business behavior inside deep feature modules. Browser code must not import Prisma, Firebase administration, server-only modules, or raw R2 bindings. Every protected operation uses a typed authorization intent; PostgreSQL owns roles and Appointments.
+Use strict TypeScript, two-space indentation, `PascalCase` for React modules/types, `camelCase` for functions, and kebab-case feature directories. Keep routes thin and business behavior inside deep feature modules. Browser code must not import Prisma, Firebase administration, server-only modules, or raw R2 bindings. Every protected operation uses a typed authorization intent; D1 owns roles and Appointments in the Worker runtime. PostgreSQL remains available during migration review.
 
 ## Testing Guidelines
 

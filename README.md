@@ -10,7 +10,7 @@ Private portal for Unyon ng mga Estudyante sa Mindanao and its Member Universiti
 - **Access foundation:** Firebase verifies identity and email; the D1 runtime stores Portal Users, roles, Appointments, sessions, and current access. Secure sessions, typed protected operations, audit records, and local Super Admin bootstrap are implemented. The PostgreSQL runtime remains available during migration review.
 - **Member University directory — latest update:** Super Admins can create, edit, archive, restore, list, and inspect Member Universities. Database constraints enforce normalized name and slug rules. Mutations and redacted audit records are persisted together, and other roles are denied access to directory operations.
 - **Private invitation links — latest verified update:** Super Admins can create copy-once University Admin links; University Admins can create scoped Representative links. Administrators share them through a private channel, and can revoke and reissue a lost link. Acceptance verifies the Firebase email, consumes the one-time token, creates or links the Portal User, and creates an Appointment transactionally. Resend delivery is deferred.
-- **Runtime coverage:** documented local verification includes module and PostgreSQL integration tests, desktop and mobile browser journeys, standard Next.js builds, Workers builds and local Wrangler/Workerd previews, and a deployment dry run. See [Runtime Proof](docs/unyon/RUNTIME_PROOF.md) for milestone details.
+- **Runtime coverage:** local verification includes module and PostgreSQL integration tests, desktop and mobile browser journeys, standard Next.js builds, Workers builds and local Wrangler/Workerd previews, and a deployment dry run.
 
 The D1 feature update was verified locally on September 25, 2026. Wrangler applied all five D1 migrations in an isolated local database; 24 desktop/mobile browser journeys passed against local Workerd, D1, and Firebase Auth Emulator. The current unit suite passes 84 tests. The PostgreSQL export/import utility intentionally omits Portal Sessions; D1 backups preserve sessions and have passed row-count and content reconciliation in a separate local restore. Neither drill used production records.
 
@@ -27,7 +27,7 @@ pnpm build:worker
 pnpm preview:worker:d1:local
 ```
 
-Open `http://localhost:3000`. Wrangler, Firebase, and D1 use local-only configuration. See [Local MVP review](docs/unyon/LOCAL_MVP_REVIEW.md) for the review checklist, encrypted backup/restore commands, and migration guardrails. No command above deploys or contacts a remote D1 database.
+Open `http://localhost:3000`. Wrangler, Firebase, and D1 use local-only configuration. No command above deploys or contacts a remote D1 database. For an encrypted local D1 backup and isolated restore check, set `D1_BACKUP_ENCRYPTION_KEY` to a separate 32-byte base64 key, then run `pnpm d1:backup:local` and `pnpm d1:restore:verify:local -- <archive-name>`.
 
 ## PostgreSQL-backed Next.js reference path
 
@@ -89,7 +89,5 @@ Firebase proves identity and verified email. In the current local target, D1 own
 
 - [Domain language](CONTEXT.md) — canonical roles, organizations, and workflows.
 - [Software requirements](docs/unyon/SRS.md) — MVP behavior and acceptance criteria.
-- [Implementation plan](docs/unyon/IMPLEMENTATION_PLAN.md) — architecture, phases, and delivery strategy.
-- [Private link Invitation spec](docs/unyon/LINK_BASED_INVITATIONS_SPEC.md) — copy-once sharing, acceptance, and rollout boundaries.
-- [Runtime proof](docs/unyon/RUNTIME_PROOF.md) — dated implementation and verification record.
 - [Architecture decisions](docs/adr/) — accepted decisions for identity, hosting, database access, and private storage.
+- [Repository guidance](AGENTS.md) — development conventions and verification expectations.
