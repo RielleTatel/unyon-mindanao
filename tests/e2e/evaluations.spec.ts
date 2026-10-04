@@ -18,7 +18,8 @@ test("submits, edits, discloses and closes an Event Evaluation", async ({ page }
   const user = users[0];
   if (!user) throw new Error("Run the local D1 Super Admin bootstrap before the browser journey");
   const startsAt = new Date(Date.now() - 7_200_000).toISOString();
-  const endsAt = new Date(Date.now() - 60_000).toISOString();
+  // Keep the Event end after the freshly bootstrapped Super Admin Appointment starts.
+  const endsAt = new Date(Date.now() - 100).toISOString();
   const publishedAt = new Date(Date.now() - 86_400_000).toISOString();
   const now = new Date().toISOString();
   executeLocalD1(`
