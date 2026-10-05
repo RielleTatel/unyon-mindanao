@@ -4,6 +4,20 @@
   "main": "vinext/server/fetch-handler",
   "compatibility_date": "2026-09-16",
   "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "APP_ENV": "production",
+    "FIREBASE_PROJECT_ID": "unyon-mindanao",
+    "NEXT_PUBLIC_APP_ORIGIN": "https://unyon-mindanao-portal.confederation.workers.dev",
+    "PERSISTENCE_PROVIDER": "d1"
+  },
+  "d1_databases": [
+    {
+      "binding": "PORTAL_DB",
+      "database_name": "unyon-mindanao-portal-production",
+      "database_id": "745b1a26-5667-49c7-9175-960c5f7d9a46",
+      "migrations_dir": "database/d1/migrations"
+    }
+  ],
   "r2_buckets": [{ "binding": "PRIVATE_FILES", "bucket_name": "unyon-private-files" }],
   "assets": {
     "binding": "ASSETS",
@@ -17,7 +31,7 @@
       "vars": {
         "APP_ENV": "preview",
         "FIREBASE_PROJECT_ID": "unyon-mindanao",
-        "NEXT_PUBLIC_APP_ORIGIN": "https://unyon-mindanao-portal-preview.tatelgabrielle19.workers.dev"
+        "NEXT_PUBLIC_APP_ORIGIN": "https://unyon-mindanao-portal-preview.confederation.workers.dev"
       },
       "secrets": { "required": ["DATABASE_URL"] }
     }
