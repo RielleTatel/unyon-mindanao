@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { AccessError, sessionCookieName, withSessionService } from "@/features/access/server";
 import { SignOutButton } from "@/features/access/ui/sign-out-button";
 import { PortalNavigation } from "@/features/dashboard/ui/portal-navigation";
-import { UnyonMark } from "@/shared/ui/unyon-mark";
+import { UnyonLogo } from "@/shared/ui/unyon-logo";
 
 export const dynamic = "force-dynamic";
 
@@ -38,11 +38,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
         <div className="portal-header__inner">
           <div className="portal-header__primary">
             <Link aria-label="Unyon Mindanao portal home" className="portal-brand" href="/portal">
-              <UnyonMark />
-              <span className="portal-brand__copy">
-                <strong>Unyon Mindanao</strong>
-                <span>Confederation portal</span>
-              </span>
+              <UnyonLogo />
             </Link>
             <div className="portal-session">
               <span className="portal-session__identity">

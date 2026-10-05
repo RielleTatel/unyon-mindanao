@@ -2,7 +2,7 @@ import { ArrowLeft, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 
 import { SignInForm } from "@/features/access/ui/sign-in-form";
-import { UnyonMark } from "@/shared/ui/unyon-mark";
+import { UnyonLogo } from "@/shared/ui/unyon-logo";
 
 export default function SignInPage() {
   return (
@@ -17,7 +17,7 @@ export default function SignInPage() {
             Portal home
           </Link>
           <div>
-            <UnyonMark className="mb-7" />
+            <UnyonLogo className="mb-7" />
             <p className="mb-3 text-xs font-extrabold tracking-[0.18em] text-accent uppercase">
               Private Confederation portal
             </p>

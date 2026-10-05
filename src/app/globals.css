@@ -98,36 +98,16 @@ a { text-underline-offset: 0.22em; }
 }
 .skip-link:focus { transform: translateY(0); }
 
-/* Brand mark */
-.unyon-mark {
+/* Official logo */
+.unyon-logo {
   position: relative;
   display: inline-block;
-  width: 2.85rem;
-  height: 2.85rem;
+  width: 13rem;
+  aspect-ratio: 2.58;
   flex: 0 0 auto;
   overflow: hidden;
-  border-radius: 0.35rem 1.25rem 1.25rem 1.25rem;
-  background: var(--paper);
-  color: var(--forest);
 }
-.unyon-mark__sun {
-  position: absolute;
-  top: 0.48rem;
-  right: 0.48rem;
-  width: 0.56rem;
-  height: 0.56rem;
-  border-radius: 50%;
-  background: var(--gold);
-}
-.unyon-mark__current {
-  position: absolute;
-  width: 2.4rem;
-  height: 2.4rem;
-  border: 0.42rem solid currentColor;
-  border-radius: 50%;
-}
-.unyon-mark__current--one { bottom: -1rem; left: -0.35rem; }
-.unyon-mark__current--two { right: -1.35rem; bottom: -0.55rem; color: var(--olive); }
+.unyon-logo__image { object-fit: cover; object-position: center 61.5%; }
 
 /* Public landing page */
 .public-shell { min-height: 100svh; overflow: hidden; background: var(--paper); }
@@ -144,10 +124,7 @@ a { text-underline-offset: 0.22em; }
   border-bottom: 1px solid color-mix(in srgb, var(--forest) 18%, transparent);
 }
 .public-brand { display: inline-flex; align-items: center; gap: 0.85rem; color: var(--forest-deep); text-decoration: none; }
-.public-brand .unyon-mark { background: var(--forest); color: var(--paper); }
-.public-brand__copy { display: grid; line-height: 1.05; }
-.public-brand__copy strong { font-size: 0.86rem; letter-spacing: 0.12em; text-transform: uppercase; }
-.public-brand__copy span { margin-top: 0.28rem; color: var(--muted-foreground); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; }
+.public-brand .unyon-logo { width: clamp(9rem, 32vw, 13.25rem); }
 .public-sign-in {
   display: inline-flex;
   min-height: 2.75rem;
@@ -240,7 +217,11 @@ a { text-underline-offset: 0.22em; }
 .auth-card__brand::before { top: -12rem; right: -10rem; }
 .auth-card__brand::after { bottom: -15rem; left: -8rem; }
 .auth-card__brand > * { position: relative; z-index: 1; }
-.auth-card__brand .unyon-mark { width: 3.3rem; height: 3.3rem; }
+.auth-card__brand .unyon-logo {
+  width: min(100%, 15.5rem);
+  border-radius: 0.35rem;
+  background: var(--paper);
+}
 .auth-card__content { display: grid; align-content: center; padding: clamp(2rem, 6vw, 4.5rem); }
 .auth-card input { background: var(--paper); }
 .invitation-card { position: relative; z-index: 1; }
@@ -252,9 +233,11 @@ a { text-underline-offset: 0.22em; }
 .portal-header__inner { width: min(1320px, calc(100% - 2rem)); margin-inline: auto; }
 .portal-header__primary { display: flex; min-height: 6.25rem; align-items: center; justify-content: space-between; gap: 2rem; }
 .portal-brand { display: inline-flex; align-items: center; gap: 0.85rem; color: inherit; text-decoration: none; }
-.portal-brand__copy { display: grid; }
-.portal-brand__copy strong { font-family: var(--font-serif); font-size: 1.16rem; font-weight: 600; letter-spacing: -0.02em; }
-.portal-brand__copy span { margin-top: 0.16rem; color: rgba(255, 253, 242, 0.58); font-size: 0.62rem; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; }
+.portal-brand .unyon-logo {
+  width: clamp(9rem, 32vw, 12.5rem);
+  border-radius: 0.35rem;
+  background: var(--paper);
+}
 .portal-session, .portal-session__identity { display: flex; align-items: center; }
 .portal-session { gap: 1rem; }
 .portal-session__identity { gap: 0.65rem; }
@@ -311,7 +294,6 @@ a { text-underline-offset: 0.22em; }
 
 @media (max-width: 680px) {
   .public-header, .public-hero, .public-section, .public-footer, .portal-header__inner, .portal-footer { width: min(100% - 1.25rem, 1180px); }
-  .public-brand__copy span { display: none; }
   .public-hero { padding-block: 3.5rem; }
   .public-hero h1 { font-size: clamp(3.2rem, 17vw, 5.2rem); }
   .public-hero__art { min-height: 24rem; }
@@ -326,8 +308,6 @@ a { text-underline-offset: 0.22em; }
   .auth-card { min-height: 100svh; border: 0; border-radius: 0; }
   .auth-card__brand { min-height: 19rem; }
   .portal-header__primary { min-height: 5.25rem; }
-  .portal-brand__copy strong { font-size: 1rem; }
-  .portal-brand__copy span { display: none; }
   .portal-nav__link { flex-direction: column; gap: 0.25rem; padding-inline: 0.75rem; font-size: 0.63rem; }
   .portal-frame .portal-content > main { padding-inline: 1rem; }
 }

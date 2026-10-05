@@ -2,7 +2,7 @@ import { ArrowUpRight, CalendarDays, FileCheck2, Megaphone } from "lucide-react"
 import Link from "next/link";
 
 import { portalMessages } from "@/shared/i18n/en";
-import { UnyonMark } from "@/shared/ui/unyon-mark";
+import { UnyonLogo } from "@/shared/ui/unyon-logo";
 
 const featureIcons = [CalendarDays, Megaphone, FileCheck2];
 
@@ -13,11 +13,7 @@ export function PortalShell() {
     <main className="public-shell">
       <header className="public-header">
         <Link aria-label={messages.homeLabel} className="public-brand" href="/">
-          <UnyonMark />
-          <span className="public-brand__copy">
-            <strong>Unyon Mindanao</strong>
-            <span>Confederation portal</span>
-          </span>
+          <UnyonLogo />
         </Link>
         <Link className="public-sign-in" href="/sign-in">
           {messages.signIn}
