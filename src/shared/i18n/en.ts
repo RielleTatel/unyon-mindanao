@@ -18,25 +18,6 @@ export const portalMessages = {
     privacyStatus: "Private by design",
     networkKicker: "Built for connection",
     networkTitle: "The Confederation and every Member University, together.",
-    networkNote:
-      "Authority stays clear. University work stays scoped. Shared work stays visible to the people who need it.",
-    areasEyebrow: "A calmer way to coordinate",
-    areasTitle: "The essentials, in one current.",
-    areas: [
-      {
-        label: "Events",
-        description: "One calendar for Confederation and university activities.",
-      },
-      {
-        label: "Announcements",
-        description: "Official updates without the noise of scattered channels.",
-      },
-      {
-        label: "Shared records",
-        description:
-          "Governed reports and evaluations for authorized officers.",
-      },
-    ],
     organizationName: "Unyon ng mga Estudyante sa Mindanao",
     accessNotice: "Authorized access only",
   },

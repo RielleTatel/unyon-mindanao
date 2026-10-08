@@ -111,7 +111,7 @@ a { text-underline-offset: 0.22em; }
 
 /* Public landing page */
 .public-shell { min-height: 100svh; overflow: hidden; background: var(--paper); }
-.public-header, .public-hero, .public-section, .public-footer {
+.public-header, .public-hero, .public-footer {
   width: min(1180px, calc(100% - 2rem));
   margin-inline: auto;
 }
@@ -196,16 +196,6 @@ a { text-underline-offset: 0.22em; }
 .public-hero__seal strong, .public-hero__seal span { position: relative; z-index: 1; display: block; }
 .public-hero__seal strong { font-family: var(--font-serif); font-size: 2.2rem; font-weight: 500; }
 .public-hero__seal span { max-width: 8rem; margin-top: 0.25rem; color: color-mix(in srgb, var(--paper) 72%, transparent); font-size: 0.64rem; font-weight: 800; letter-spacing: 0.12em; line-height: 1.45; text-transform: uppercase; }
-.public-band { background: var(--forest-deep); color: var(--paper); }
-.public-section { padding-block: clamp(4rem, 8vw, 7rem); }
-.public-section__heading { display: grid; grid-template-columns: minmax(12rem, 0.45fr) minmax(0, 1fr); gap: 2rem; align-items: end; }
-.public-section__heading h2 { max-width: 17ch; margin: 0; font-family: var(--font-serif); font-size: clamp(2.5rem, 5vw, 4.8rem); font-weight: 500; letter-spacing: -0.05em; line-height: 1; }
-.public-section__heading p { max-width: 35rem; justify-self: end; margin: 0; color: rgba(255, 253, 242, 0.68); line-height: 1.75; }
-.public-features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin-top: 4rem; background: rgba(255, 253, 242, 0.22); }
-.public-feature { min-height: 18rem; background: var(--forest-deep); padding: clamp(1.5rem, 3vw, 2.4rem); }
-.public-feature__number { display: flex; align-items: center; justify-content: space-between; color: var(--gold); font-size: 0.7rem; font-weight: 900; letter-spacing: 0.14em; }
-.public-feature h3 { margin: 5rem 0 0.85rem; font-family: var(--font-serif); font-size: 2rem; font-weight: 500; }
-.public-feature p { margin: 0; color: rgba(255, 253, 242, 0.66); font-size: 0.92rem; line-height: 1.7; }
 .public-footer { display: flex; justify-content: space-between; gap: 1.5rem; border-top: 1px solid color-mix(in srgb, var(--forest) 15%, transparent); padding-block: 1.5rem; color: var(--muted-foreground); font-size: 0.72rem; }
 
 /* Sign in and invitation flows */
@@ -285,24 +275,19 @@ a { text-underline-offset: 0.22em; }
   .public-hero { min-height: auto; grid-template-columns: 1fr; }
   .public-hero__art { min-height: 29rem; }
   .brand-pattern { left: 0; }
-  .public-section__heading { grid-template-columns: 1fr; }
-  .public-section__heading p { justify-self: start; }
   .auth-card { grid-template-columns: 1fr; }
   .auth-card__brand { min-height: 22rem; }
   .portal-session__identity { display: none; }
 }
 
 @media (max-width: 680px) {
-  .public-header, .public-hero, .public-section, .public-footer, .portal-header__inner, .portal-footer { width: min(100% - 1.25rem, 1180px); }
+  .public-header, .public-hero, .public-footer, .portal-header__inner, .portal-footer { width: min(100% - 1.25rem, 1180px); }
   .public-hero { padding-block: 3.5rem; }
   .public-hero h1 { font-size: clamp(3.2rem, 17vw, 5.2rem); }
   .public-hero__art { min-height: 24rem; }
   .brand-pattern { inset: 0 1rem 3rem 0; border-radius: 5rem 1rem 5rem 1rem; }
   .public-hero__seal { right: 0; width: 9.5rem; }
   .public-hero__seal strong { font-size: 1.7rem; }
-  .public-features { grid-template-columns: 1fr; }
-  .public-feature { min-height: auto; }
-  .public-feature h3 { margin-top: 2.8rem; }
   .public-footer, .portal-footer { flex-direction: column; }
   .auth-page { padding: 0; }
   .auth-card { min-height: 100svh; border: 0; border-radius: 0; }

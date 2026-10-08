@@ -1,10 +1,8 @@
-import { ArrowUpRight, CalendarDays, FileCheck2, Megaphone } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import Link from "next/link";
 
 import { portalMessages } from "@/shared/i18n/en";
 import { UnyonLogo } from "@/shared/ui/unyon-logo";
-
-const featureIcons = [CalendarDays, Megaphone, FileCheck2];
 
 export function PortalShell() {
   const messages = portalMessages.shell;
@@ -47,33 +45,6 @@ export function PortalShell() {
           </div>
         </div>
       </section>
-
-      <div className="public-band">
-        <section aria-labelledby="portal-areas-title" className="public-section">
-          <div className="public-section__heading">
-            <div>
-              <p className="eyebrow">{messages.areasEyebrow}</p>
-              <h2 id="portal-areas-title">{messages.areasTitle}</h2>
-            </div>
-            <p>{messages.networkNote}</p>
-          </div>
-          <div className="public-features">
-            {messages.areas.map(({ label, description }, index) => {
-              const Icon = featureIcons[index];
-              return (
-                <article className="public-feature" key={label}>
-                  <div className="public-feature__number">
-                    <span>0{index + 1}</span>
-                    <Icon aria-hidden="true" size={22} strokeWidth={1.5} />
-                  </div>
-                  <h3>{label}</h3>
-                  <p>{description}</p>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-      </div>
 
       <footer className="public-footer">
         <span>{messages.organizationName}</span>
